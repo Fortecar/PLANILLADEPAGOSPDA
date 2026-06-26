@@ -1,0 +1,42 @@
+Planilla PDA — despliegue en servidor
+=====================================
+
+CONTENIDO DEL ZIP
+-----------------
+- server.js, index.html, package.json, package-lock.json
+- data/planilla-pda.json (datos; hacer backup antes de actualizar)
+- env.example, Dockerfile, start_prod.ps1
+
+
+INSTALACION SIN DOCKER (Node.js 18+)
+------------------------------------
+1. Subir y descomprimir el zip en la carpeta deseada.
+2. En esa carpeta:
+     npm ci --omit=dev
+3. Variables (Linux/macOS):
+     export NODE_ENV=production
+     export PORT=3000
+     export HOST=0.0.0.0
+     export CORTE_PASSWORD='tu_clave_segura'
+     node server.js
+   Windows PowerShell:
+     $env:NODE_ENV="production"; $env:PORT="3004"; $env:HOST="0.0.0.0"
+     node server.js
+   O ejecutar: .\start_prod.ps1 (puerto 3004 y firewall en Windows).
+
+4. Detrás de Nginx/Apache: proxy HTTP al puerto local; HTTPS en el proxy.
+5. Persistencia: respaldar periodicamente data/planilla-pda.json.
+
+
+DOCKER
+------
+  docker build -t planilla-pda .
+  docker run -d -p 3000:3000 -e CORTE_PASSWORD=... -v planilla-data:/app/data --name planilla-pda planilla-pda
+
+El volumen /app/data conserva la planilla entre reinicios.
+
+
+PRODUCCION
+----------
+NODE_ENV=production activa compresión gzip y caché de archivos estáticos.
+Cambiar CORTE_PASSWORD en el servidor (no usar el valor por defecto en red).

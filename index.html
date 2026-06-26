@@ -1,0 +1,3798 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PRIMER PASO: PLANILLA DE PAGOS PDA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --surface2: #243044;
+      --border: #2d3a4f;
+      --text: #e6edf3;
+      --text-muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --warning: #eab308;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; line-height: 1.5; }
+
+    main.planilla-admin {
+      --bg: #f8fafc;
+      --surface: #fff;
+      --surface2: #f1f5f9;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --danger: #dc2626;
+    }
+
+    /* 10 columnas × 2 filas de campos + fila de botones (obs ocupa 2 cols al final de fila 2) */
+    .form-grid-pda {
+      display: grid;
+      grid-template-columns: repeat(10, minmax(0, 1fr));
+      gap: 0.65rem 0.35rem;
+      align-items: end;
+    }
+    .form-grid-pda .span-titular {
+      grid-column: span 2;
+      min-width: 0;
+    }
+    .form-grid-pda .span-obs {
+      grid-column: span 2;
+      min-width: 0;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+    .form-group label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      text-align: center;
+    }
+    .form-group input,
+    .form-group select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.28rem 0.4rem;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.75rem;
+      min-width: 0;
+      width: 100%;
+      min-height: 2rem;
+    }
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+    }
+    .form-grid-pda .actions-wrap {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 1.1rem;
+    }
+    .form-grid-pda     .actions-buttons {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.6rem;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 0.5rem 1rem;
+      min-height: 2.25rem;
+      min-width: 7rem;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s, transform 0.05s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--border); }
+    .btn-small { padding: 0.35rem 0.65rem; font-size: 0.75rem; min-width: auto; text-transform: uppercase; letter-spacing: 0.03em; }
+    .btn-corte { background: #166534; color: #fff; font-weight: 600; }
+    .btn-corte:hover { background: #15803d; }
+    .btn-subir-refs { background: #eab308; color: #1f2937; font-weight: 600; }
+    .btn-subir-refs:hover { background: #ca8a04; color: #1f2937; }
+
+    .planilla-scaffold {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .planilla-main-col {
+      min-width: 0;
+    }
+    .planilla-scroll-xy-row {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+    }
+    .planilla-scroll-x {
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    .planilla-scroll-x-top {
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .planilla-scroll-x-bottom {
+      border-top: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .planilla-scroll-x-ghost {
+      height: 12px;
+      pointer-events: none;
+    }
+    /* Horizontal oculto en main (barras arriba/abajo); vertical oculto en main (barra derecha) */
+    .planilla-scroll-x-main {
+      flex: 1;
+      min-width: 0;
+      overflow: auto;
+      max-height: min(65vh, 520px);
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .planilla-scroll-x-main::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+    .planilla-table-wrap {
+      width: max-content;
+      min-width: 100%;
+    }
+    .planilla-scroll-y {
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    .planilla-scroll-y-right {
+      border-left: 1px solid var(--border);
+      background: var(--surface2);
+      flex: 0 0 auto;
+      max-height: min(65vh, 520px);
+    }
+    .planilla-scroll-y-ghost {
+      width: 12px;
+      pointer-events: none;
+    }
+    .planilla-scroll-x-main .planilla-table {
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    .planilla-scroll-x-main .planilla-table th {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      box-shadow: 0 1px 0 var(--border);
+    }
+    .comprobante-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.2rem 0;
+      min-width: 5.5rem;
+    }
+    .btn-comp {
+      padding: 0.22rem 0.55rem;
+      font-size: 0.6rem;
+      min-width: auto;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-comp:hover { background: var(--border); }
+    .btn-comp:disabled { opacity: 0.5; cursor: not-allowed; }
+    .comprobante-empty {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .planilla-table {
+      width: 100%;
+      min-width: 3620px;
+      border-collapse: collapse;
+      font-size: 0.65rem;
+      table-layout: auto;
+    }
+    .planilla-table th,
+    .planilla-table td {
+      padding: 0.2rem 0.3rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      line-height: 1.15;
+      vertical-align: middle;
+    }
+    .planilla-table th {
+      background: #e2e8f0;
+      color: #475569;
+      font-weight: 600;
+      font-size: 0.55rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .planilla-table th.col-finanzas { background: #dcfce7; color: #166534; }
+    .planilla-table tbody tr:hover { background: rgba(0,0,0,0.03); }
+
+    .table-input {
+      font-size: 0.65rem;
+      padding: 0.15rem 0.25rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      max-width: 9rem;
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .btn-del {
+      padding: 0.18rem 0.35rem;
+      font-size: 0.65rem;
+      border-radius: 4px;
+      border: none;
+      background: var(--danger);
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .btn-edit-inline { background: none; border: none; cursor: pointer; color: var(--accent); font-size: 0.75rem; padding: 0 0.15rem; }
+    .btn-view {
+      background: #64748b; color: white; border: none; padding: 0.18rem 0.4rem; border-radius: 4px;
+      cursor: pointer; font-size: 0.65rem; text-decoration: none; display: inline-block;
+    }
+    .btn-granville {
+      background: #5086c1; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .fila-autorizada td { background: #dcfce7 !important; }
+    .fila-rechazada-finanzas td,
+    .fila-rechazada-finanzas td .edit-timestamp,
+    .fila-rechazada-finanzas td .table-input {
+      color: var(--danger) !important;
+      font-weight: 600;
+    }
+    .fila-asiento-sin-confirmacion td {
+      background: #ff9e8f !important;
+      color: #1f2937 !important;
+    }
+    .fila-asiento td { background: #e2e8f0 !important; }
+    .texto-rojo { color: var(--danger) !important; font-weight: 600; }
+    .edit-timestamp { font-size: 0.55rem; color: var(--text-muted); display: block; margin-top: 2px; font-style: italic; }
+    .cupon-badge { font-size: 0.55rem; display: block; margin-top: 2px; line-height: 1.2; word-break: break-all; }
+    .cupon-ok { color: #15803d; }
+    .cupon-pendiente { color: #b45309; font-style: italic; }
+    .empty-state {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .toolbar h2 { margin: 0; }
+    #input-file-edit,
+    #input-file-comprobante-edit { display: none; }
+
+    /* Mayúsculas en todos los botones nativos (p. ej. eliminar, íconos en tabla) */
+    button {
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    /* CE: mismo renglón que el botón (no apilar arriba/abajo) */
+    .ce-slot {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-end;
+      gap: 0.35rem;
+      width: 100%;
+      min-height: 2rem;
+    }
+    .btn-ce-granville {
+      flex: 1;
+      min-width: 0;
+      min-height: 2rem;
+      padding: 0.35rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+      transition: opacity 0.15s, filter 0.15s, background 0.15s;
+    }
+    .ce-slot.granville-active .btn-ce-granville {
+      flex: 0 0 auto;
+      min-width: 2.75rem;
+      width: auto;
+    }
+    .btn-ce-granville:not(:disabled):hover {
+      background: var(--border);
+    }
+    .btn-ce-granville:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      filter: grayscale(0.35);
+      background: #e2e8f0;
+      color: #94a3b8;
+      border-color: #cbd5e1;
+    }
+    #ceSelectWrap {
+      display: none;
+      flex: 1;
+      min-width: 0;
+    }
+    #ceSelectWrap.ce-visible {
+      display: block;
+    }
+    #ceSelectWrap select#ce {
+      width: 100%;
+      min-height: 2rem;
+    }
+
+    /* Campos opcionales (borde amarillo + leyenda) */
+    .optional-field input,
+    .optional-field select {
+      border-color: #BC9032;
+    }
+    .optional-legend {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: #BC9032;
+      margin: 0.25rem 0 0.75rem;
+      user-select: none;
+    }
+    .optional-legend .swatch {
+      width: 0.85rem;
+      height: 0.85rem;
+      border-radius: 0.25rem;
+      border: 2px solid #BC9032;
+      background: transparent;
+      flex: 0 0 auto;
+    }
+
+    .tabs-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      margin-bottom: 1.25rem;
+      padding: 0.75rem;
+      background: linear-gradient(180deg, #dbeafe 0%, #eff6ff 55%, #f8fafc 100%);
+      border: 2px solid #60a5fa;
+      border-radius: 14px;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        0 3px 10px rgba(37, 99, 235, 0.12);
+    }
+    .tab-btn {
+      flex: 1 1 12rem;
+      min-height: 3.85rem;
+      padding: 1rem 1.15rem;
+      border-radius: 11px;
+      border: 2px solid #94a3b8;
+      background: #fff;
+      color: #0f172a;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 800;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.1s;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.14);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+    }
+    .tab-btn i {
+      font-size: 1.08rem;
+      opacity: 0.9;
+    }
+    .tab-btn:hover {
+      background: #eff6ff;
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.22);
+      transform: translateY(-1px);
+    }
+    .tab-btn:hover i { opacity: 1; }
+    .tab-btn.is-active {
+      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+      color: #fff;
+      border-color: #1d4ed8;
+      box-shadow:
+        0 5px 16px rgba(37, 99, 235, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+    .tab-btn.is-active i { opacity: 1; }
+    .tab-panel { display: none; }
+    .tab-panel.is-active { display: block; }
+
+    .planilla-table.table-tab-carga { min-width: 2780px; }
+    .planilla-table.table-tab-finanzas { min-width: 4000px; }
+    .planilla-table.table-tab-historico { min-width: 3920px; }
+    .planilla-table td.cell-ro {
+      text-align: center;
+      font-size: 0.62rem;
+    }
+
+    .modal-masivo-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(15, 23, 42, 0.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem;
+    }
+    .modal-masivo-backdrop.is-open {
+      display: flex;
+    }
+    .modal-masivo-panel {
+      background: #fff;
+      color: #0f172a;
+      max-width: min(99vw, 1900px);
+      width: 100%;
+      max-height: 94vh;
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+      display: flex;
+      flex-direction: column;
+      padding: 1rem 1.15rem;
+      border: 1px solid #e2e8f0;
+    }
+    .modal-masivo-panel h3 {
+      margin: 0 0 0.35rem;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    .modal-masivo-panel .modal-masivo-hint {
+      margin: 0;
+      font-size: 0.78rem;
+      color: #64748b;
+    }
+    .modal-masivo-panel .modal-masivo-aviso72 {
+      margin: 0.35rem 0 0;
+      font-size: 0.78rem;
+      color: #b45309;
+      font-weight: 600;
+    }
+    .modal-masivo-scroll {
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: calc(94vh - 10.5rem);
+      margin-top: 0.65rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      scrollbar-width: thin;
+      scrollbar-color: #94a3b8 #f1f5f9;
+    }
+    .modal-masivo-scroll::-webkit-scrollbar {
+      width: 14px;
+      height: 10px;
+    }
+    .modal-masivo-scroll::-webkit-scrollbar-thumb {
+      background: #94a3b8;
+      border-radius: 7px;
+      border: 3px solid #f1f5f9;
+    }
+    .modal-masivo-scroll::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .table-masivo-preview {
+      border-collapse: collapse;
+      font-size: 0.68rem;
+      min-width: max-content;
+    }
+    .table-masivo-preview th,
+    .table-masivo-preview td {
+      border: 1px solid #e2e8f0;
+      padding: 0.18rem 0.28rem;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .table-masivo-preview th {
+      background: #f1f5f9;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .table-masivo-preview .sticky-nro {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      background: #e2e8f0;
+      font-weight: 700;
+      text-align: center;
+      min-width: 2rem;
+    }
+    .table-masivo-preview th.sticky-nro {
+      z-index: 4;
+    }
+    .prev-inp {
+      min-width: 4rem;
+      max-width: 13rem;
+      width: 100%;
+      font-size: 0.65rem;
+      padding: 0.22rem 0.35rem;
+      border-radius: 4px;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      color: #0f172a;
+      box-sizing: border-box;
+    }
+    .table-masivo-preview select.prev-inp {
+      max-width: 11rem;
+    }
+    .prev-inp.prev-inp-ro {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+    .modal-masivo-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      justify-content: flex-end;
+      margin-top: 0.85rem;
+      flex-shrink: 0;
+    }
+    .btn-quitar-fila {
+      padding: 0.2rem 0.45rem;
+      font-size: 0.62rem;
+      border-radius: 4px;
+      border: none;
+      background: #ef4444;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-quitar-fila:hover {
+      background: #dc2626;
+    }
+
+    .grl-masivo-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.65rem;
+      margin-top: 0.85rem;
+      padding: 0.65rem 0.85rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.75rem;
+    }
+    .grl-masivo-bar[hidden] { display: none !important; }
+    .grl-export-cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+    }
+    .grl-cb-lote {
+      width: 1rem;
+      height: 1rem;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .auth-masivo-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.65rem;
+      margin: 0.75rem 0 0.5rem;
+      padding: 0.65rem 0.85rem;
+      background: #eff6ff;
+      border: 1px solid #93c5fd;
+      border-radius: 8px;
+      font-size: 0.75rem;
+    }
+    .auth-masivo-bar[hidden] { display: none !important; }
+    .auth-masivo-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+      min-width: 5.5rem;
+    }
+    .auth-masivo-cb {
+      width: 1rem;
+      height: 1rem;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .auth-masivo-total-fin {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0 0 0.5rem;
+      padding: 0.55rem 0.85rem;
+      background: #ecfdf5;
+      border: 1px solid #6ee7b7;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      color: #065f46;
+    }
+    .auth-masivo-total-fin[hidden] { display: none !important; }
+    .auth-masivo-total-fin strong {
+      font-size: 0.95rem;
+      letter-spacing: 0.02em;
+    }
+    </style>
+</head>
+<body class="bg-gray-50 text-slate-800 font-sans">
+
+  <header class="bg-slate-900 text-white py-2 px-4 shadow-lg">
+    <div class="max-w-[1800px] mx-auto flex items-center gap-3">
+      <div class="bg-blue-600 p-2 rounded-lg shadow-blue-500/50 shadow-lg">
+        <i class="fa-solid fa-robot text-xl"></i>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold tracking-wide">PRIMER PASO: PLANILLA DE PAGOS PDA</h1>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-[1800px] mx-auto p-4 planilla-admin">
+    <input type="file" id="input-file-edit" onchange="finalizarEdicionAdjunto(this)">
+    <input type="file" id="input-file-comprobante-edit" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.doc,.docx" onchange="finalizarEdicionComprobante(this)">
+    <input type="file" id="input-masivo-xlsx" accept=".xlsx,.xls" style="display:none" onchange="procesarArchivoMasivo(this)">
+
+    <div class="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100 rounded-3xl shadow-2xl p-4 mb-6 border-4 border-blue-300 ring-4 ring-blue-200/50">
+      <div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow-md p-4 border-2 border-blue-200">
+        <h2 class="text-xs font-bold text-slate-800 flex items-center gap-1 mb-6">
+          <i class="fa-solid fa-file-invoice-dollar text-blue-600 text-xs"></i>
+          CARGA DE NECESIDAD DE PAGO
+        </h2>
+    <form id="pagoForm">
+        <div class="form-grid-pda">
+            <div class="form-group">
+                <label>Empresa</label>
+                <select id="empresa" required onchange="toggleCE()">
+                    <option value="">Seleccionar...</option>
+                    <option value="Forte Car">Forte Car</option>
+                    <option value="Granville">Granville</option>
+                    <option value="Pampawagen">Pampawagen</option>
+                </select>
+            </div>
+            <div class="form-group" id="container-ce">
+                <label>CE (Granville)</label>
+                <div class="ce-slot" id="ceSlot">
+                    <button type="button" id="btnCeGranville" class="btn-ce-granville" disabled
+                      title="Disponible solo si la empresa es Granville"
+                      onclick="focusCeSelect()">CE</button>
+                    <div id="ceSelectWrap">
+                        <select id="ce">
+                            <option value="">-</option>
+                            <option value="1337">1337</option>
+                            <option value="3550">3550</option>
+                            <option value="3831">3831</option>
+                            <option value="3847">3847</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Solicitante</label>
+                <select id="solicitante" required>
+                    <option value="">Seleccionar...</option>
+                    <option value="Sebastian Buselli">Sebastian Buselli</option>
+                    <option value="Andrea Salvay">Andrea Salvay</option>
+                    <option value="Avelina Tubio">Avelina Tubio</option>
+                    <option value="Silvina Granero">Silvina Granero</option>
+                    <option value="Hector Montserrat">Hector Montserrat</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Grupo</label><input type="text" id="grupo" required></div>
+            <div class="form-group"><label>Orden</label><input type="text" id="orden" required></div>
+            <div class="form-group">
+                <label>Previsión</label>
+                <select id="prevision" onchange="togglePrevision()" required>
+                    <option value="NO">NO</option>
+                    <option value="SI">SI</option>
+                </select>
+            </div>
+            <div class="form-group" id="container-monto-prev" style="display:none;">
+                <label>Importe Previsión</label>
+                <input type="text" id="monto_prev" placeholder="$ 0,00">
+            </div>
+            <div class="form-group">
+                <label id="label-monto">Monto Integración</label>
+                <input type="text" id="monto" required placeholder="Ej.: 199,98 o 1234567,50"
+                  title="Sin punto (.). Centavos con coma (,) — ej.: 1234,56.">
+            </div>
+            <div class="form-group"><label>Ref/Cta Pers.</label><input type="text" id="cta_personal" required></div>
+            <div class="form-group span-titular"><label>Titular</label><input type="text" id="titular" required></div>
+            <div class="form-group">
+                <label>Concepto</label>
+                <select id="concepto" required>
+                    <option value="">Seleccionar...</option>
+                    <option value="12">12</option>
+                    <option value="VD">VD</option>
+                    <option value="IV">IV</option>
+                    <option value="CM">CM</option>
+                    <option value="DA">DA</option>
+                    <option value="GS">GS</option>
+                    <option value="DS">DS</option>
+                    <option value="IM">IM</option>
+                    <option value="CE">CE</option>
+                    <option value="CN">CN</option>
+                    <option value="CT">CT</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Descripción</label>
+                <select id="descripcion" required>
+                    <option value="">Seleccionar...</option>
+                    <option value="Cuota Vigente">Cuota Vigente</option>
+                    <option value="Deuda Vencida">Deuda Vencida</option>
+                    <option value="Licitación">Licitación</option>
+                    <option value="Rehabilitación parcial">Rehabilitación parcial</option>
+                    <option value="Rehabilitación total">Rehabilitación total</option>
+                    <option value="Cambio de modelo">Cambio de modelo</option>
+                    <option value="Derecho Adjudicación">Derecho Adjudicación</option>
+                    <option value="Gastos de sellado">Gastos de sellado</option>
+                    <option value="Derecho de inscripción">Derecho de inscripción</option>
+                    <option value="Integración Mínima">Integración Mínima</option>
+                    <option value="Alícuota Extraordinaria">Alícuota Extraordinaria</option>
+                    <option value="Ingresos varios">Ingresos varios</option>
+                    <option value="Cancelación anticipada">Cancelación anticipada</option>
+                    <option value="Cancelación total">Cancelación total</option>
+                </select>
+            </div>
+            <div class="form-group optional-field"><label>Cuotas</label><input type="text" id="cuotas"></div>
+            <div class="form-group optional-field"><label>Llave contra llave</label><input type="text" id="respaldo"></div>
+            <div class="form-group optional-field"><label>Saldo en cuenta</label><input type="text" id="saldo"></div>
+            <div class="form-group"><label>Cuenta Mayor</label><input type="text" id="cuenta_mayor" required></div>
+            <div class="form-group"><label>Fecha Vencimiento</label><input type="date" id="vencimiento" required></div>
+            <div class="form-group optional-field"><label>Adjunto</label><input type="file" id="adjunto" accept=".pdf, .xlsx"></div>
+            <div class="form-group span-obs optional-field" id="observaciones-group"><label>Obs. Solicitante</label><input type="text" id="observaciones_carga"></div>
+
+            <div class="actions-wrap">
+                <div class="actions-buttons">
+                  <button type="button" class="btn btn-primary" onclick="procesarCarga()">CARGAR NECESIDAD DE PAGO</button>
+                  <button type="button" class="btn btn-secondary" onclick="limpiarFormularioPda()">LIMPIAR</button>
+                  <button type="button" class="btn btn-secondary btn-small" onclick="descargarPlantillaMasiva()" title="Modelo sin columna Adjunto">
+                    <i class="fa-solid fa-file-arrow-down mr-1"></i> Plantilla Excel
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-small" onclick="document.getElementById('input-masivo-xlsx').click()" title="Cada fila = un pedido (sin adjuntos)">
+                    <i class="fa-solid fa-file-import mr-1"></i> Carga masiva
+                  </button>
+                </div>
+                <div class="optional-legend" aria-label="Referencia de campos opcionales">
+                  <span class="swatch" aria-hidden="true"></span>
+                  Campo opcional
+                </div>
+            </div>
+        </div>
+    </form>
+      </div>
+    </div>
+
+    <div class="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100 rounded-3xl shadow-2xl p-4 mb-6 border-4 border-emerald-500 ring-4 ring-emerald-200/60">
+      <div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow-md p-4 border-2 border-emerald-200">
+        <div class="tabs-bar" role="tablist" aria-label="Etapas planilla">
+          <button type="button" class="tab-btn is-active" role="tab" aria-selected="true" id="tab-btn-carga" onclick="setPestana('carga')">
+            <i class="fa-solid fa-file-pen mr-1"></i> 1. Por autorizar
+          </button>
+          <button type="button" class="tab-btn" role="tab" aria-selected="false" id="tab-btn-finanzas" onclick="setPestana('finanzas')">
+            <i class="fa-solid fa-building-columns mr-1"></i> 2. Por pagar
+          </button>
+          <button type="button" class="tab-btn" role="tab" aria-selected="false" id="tab-btn-historico" onclick="setPestana('historico')">
+            <i class="fa-solid fa-circle-check mr-1"></i> 3. Pagados (histórico)
+          </button>
+          <button type="button" class="tab-btn" role="tab" aria-selected="false" id="tab-btn-eliminados" onclick="setPestana('eliminados')">
+            <i class="fa-solid fa-trash-can mr-1"></i> 4. Eliminados (histórico)
+          </button>
+        </div>
+
+        <div id="panel-carga" class="tab-panel is-active" role="tabpanel">
+          <div class="toolbar">
+            <h2 class="text-xs font-bold text-slate-800 flex items-center gap-1">
+              <i class="fa-solid fa-table text-blue-600 text-xs"></i>
+              Solicitudes pendientes de autorización PDA
+            </h2>
+          </div>
+          <div class="planilla-scaffold" data-planilla="carga">
+            <div class="planilla-main-col">
+            <div class="planilla-scroll-x planilla-scroll-x-top" aria-label="Desplazamiento horizontal superior">
+              <div class="planilla-scroll-x-ghost"></div>
+            </div>
+            <div class="planilla-scroll-xy-row">
+            <div class="planilla-scroll-x planilla-scroll-x-main">
+              <div class="planilla-table-wrap">
+            <table class="planilla-table table-tab-carga" aria-label="Tabla carga PDA">
+              <thead>
+                <tr>
+                  <th>Acción</th>
+                  <th>Fecha/Hora Carga</th>
+                  <th>Solicitante</th>
+                  <th>Empresa</th>
+                  <th>CE</th>
+                  <th>Grupo</th>
+                  <th>Orden</th>
+                  <th>Previsión</th>
+                  <th>Monto Integración</th>
+                  <th>Ref/Cta</th>
+                  <th>Titular</th>
+                  <th>Concepto</th>
+                  <th>Desc.</th>
+                  <th>Cuotas</th>
+                  <th>Llave contra llave / doc</th>
+                  <th>Saldo</th>
+                  <th>Cta Mayor</th>
+                  <th>Adjunto</th>
+                  <th>OBS Solicitante</th>
+                  <th>Vencimiento</th>
+                  <th class="col-finanzas">AUTORIZACIÓN RESPONSABLE PDA</th>
+                </tr>
+              </thead>
+              <tbody id="cuerpoTablaCarga"></tbody>
+            </table>
+              </div>
+            </div>
+            <div class="planilla-scroll-y planilla-scroll-y-right" aria-label="Desplazamiento vertical">
+              <div class="planilla-scroll-y-ghost"></div>
+            </div>
+            </div>
+            <div class="planilla-scroll-x planilla-scroll-x-bottom" aria-label="Desplazamiento horizontal inferior">
+              <div class="planilla-scroll-x-ghost"></div>
+            </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="panel-finanzas" class="tab-panel" role="tabpanel">
+          <div class="toolbar">
+            <h2 class="text-xs font-bold text-slate-800 flex items-center gap-1">
+              <i class="fa-solid fa-table text-blue-600 text-xs"></i>
+              Autorizado PDA — pendiente de pago (finanzas)
+            </h2>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button type="button" class="btn btn-corte btn-small" onclick="exportarPago()"><i class="fa-solid fa-file-excel mr-1"></i> Planilla para pago</button>
+            </div>
+          </div>
+          <div id="auth-masivo-bar" class="auth-masivo-bar" hidden>
+            <span class="font-semibold text-slate-700">Autorización masiva · Finanzas</span>
+            <span id="auth-masivo-count" class="font-semibold text-slate-700">0 seleccionados</span>
+            <button type="button" class="btn btn-secondary btn-small" onclick="seleccionarTodosAuthMasivoPendientes()">Seleccionar pendientes (-)</button>
+            <button type="button" class="btn btn-secondary btn-small" onclick="deseleccionarTodosAuthMasivo()">Quitar selección</button>
+            <button type="button" class="btn btn-primary btn-small" onclick="aplicarAuthMasivo('Autorizado')">Autorizar seleccionados</button>
+            <button type="button" class="btn btn-secondary btn-small" onclick="aplicarAuthMasivo('Rechazado')">Rechazar seleccionados</button>
+            <span id="auth-masivo-hint" class="text-slate-500" style="font-size:0.68rem;">Solo filas con «-» en Autorización Finanzas</span>
+          </div>
+          <div id="auth-masivo-total-fin" class="auth-masivo-total-fin" hidden>
+            <i class="fa-solid fa-calculator" aria-hidden="true"></i>
+            <span>Total Monto Integración (seleccionados):</span>
+            <strong id="auth-masivo-total-monto">$ 0,00</strong>
+          </div>
+          <div class="planilla-scaffold" data-planilla="finanzas">
+            <div class="planilla-main-col">
+            <div class="planilla-scroll-x planilla-scroll-x-top" aria-label="Desplazamiento horizontal superior">
+              <div class="planilla-scroll-x-ghost"></div>
+            </div>
+            <div class="planilla-scroll-xy-row">
+            <div class="planilla-scroll-x planilla-scroll-x-main">
+              <div class="planilla-table-wrap">
+            <table class="planilla-table table-tab-finanzas" aria-label="Tabla finanzas">
+              <thead>
+                <tr>
+                  <th>Acción</th>
+                  <th>Fecha/Hora Carga</th>
+                  <th>Solicitante</th>
+                  <th>Empresa</th>
+                  <th>CE</th>
+                  <th>Grupo</th>
+                  <th>Orden</th>
+                  <th>Previsión</th>
+                  <th>Monto Integración</th>
+                  <th>Ref/Cta</th>
+                  <th>Titular</th>
+                  <th>Concepto</th>
+                  <th>Desc.</th>
+                  <th>Cuotas</th>
+                  <th>Llave contra llave / doc</th>
+                  <th>Saldo</th>
+                  <th>Cta Mayor</th>
+                  <th>Adjunto</th>
+                  <th>OBS Solicitante</th>
+                  <th>Vencimiento</th>
+                  <th class="col-finanzas">AUTORIZACIÓN RESPONSABLE PDA</th>
+                  <th class="col-finanzas">AUTORIZACIÓN FINANZAS</th>
+                  <th class="col-finanzas">COMPROBACIÓN SALDO</th>
+                  <th class="col-finanzas">FECHA SOLIC. FINANZAS</th>
+                  <th class="col-finanzas">CONFIRMACIÓN PAGO</th>
+                  <th class="col-finanzas">REF. ASIENTO</th>
+                  <th class="col-finanzas">OBS. FINANZAS</th>
+                  <th>GRL Export</th>
+                  <th>Comprobante</th>
+                </tr>
+              </thead>
+              <tbody id="cuerpoTablaFinanzas"></tbody>
+            </table>
+              </div>
+            </div>
+            <div class="planilla-scroll-y planilla-scroll-y-right" aria-label="Desplazamiento vertical">
+              <div class="planilla-scroll-y-ghost"></div>
+            </div>
+            </div>
+            <div class="planilla-scroll-x planilla-scroll-x-bottom" aria-label="Desplazamiento horizontal inferior">
+              <div class="planilla-scroll-x-ghost"></div>
+            </div>
+            </div>
+          </div>
+          <div id="grl-masivo-bar" class="grl-masivo-bar" hidden>
+            <span id="grl-masivo-count" class="font-semibold text-slate-700">0 seleccionados</span>
+            <button type="button" class="btn btn-secondary btn-small" onclick="seleccionarTodosGrlFinanzasVisibles()">Seleccionar Granville (aut. finanzas)</button>
+            <button type="button" class="btn btn-secondary btn-small" onclick="deseleccionarTodosGrl()">Quitar selección</button>
+            <button type="button" class="btn btn-granville btn-small" onclick="exportarGranvilleMasivo()"><i class="fa-solid fa-file-excel mr-1"></i> Descargar GRL combinado</button>
+            <span class="text-slate-500" style="font-size:0.68rem;">Un archivo por CE · mismas columnas que GRL individual</span>
+          </div>
+        </div>
+
+        <div id="panel-historico" class="tab-panel" role="tabpanel">
+          <div class="toolbar">
+            <h2 class="text-xs font-bold text-slate-800 flex items-center gap-1">
+              <i class="fa-solid fa-table text-blue-600 text-xs"></i>
+              Abonados (confirmación de pago y ref. asiento)
+            </h2>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button type="button" class="btn btn-subir-refs btn-small" onclick="exportarHistoricoAbonados()"><i class="fa-solid fa-file-excel mr-1"></i> Exportar pagos</button>
+              <button type="button" class="btn btn-secondary btn-small" onclick="exportarHistorico()"><i class="fa-solid fa-chart-simple mr-1"></i> Planilla histórica (todos)</button>
+            </div>
+          </div>
+          <div class="planilla-scaffold" data-planilla="historico">
+            <div class="planilla-main-col">
+            <div class="planilla-scroll-x planilla-scroll-x-top" aria-label="Desplazamiento horizontal superior">
+              <div class="planilla-scroll-x-ghost"></div>
+            </div>
+            <div class="planilla-scroll-xy-row">
+            <div class="planilla-scroll-x planilla-scroll-x-main">
+              <div class="planilla-table-wrap">
+            <table class="planilla-table table-tab-historico" aria-label="Histórico abonados">
+              <thead>
+                <tr>
+                  <th>Fecha/Hora Carga</th>
+                  <th>Solicitante</th>
+                  <th>Empresa</th>
+                  <th>CE</th>
+                  <th>Grupo</th>
+                  <th>Orden</th>
+                  <th>Previsión</th>
+                  <th>Monto Integración</th>
+                  <th>Ref/Cta</th>
+                  <th>Titular</th>
+                  <th>Concepto</th>
+                  <th>Desc.</th>
+                  <th>Cuotas</th>
+                  <th>Llave contra llave / doc</th>
+                  <th>Saldo</th>
+                  <th>Cta Mayor</th>
+                  <th>Adjunto</th>
+                  <th>OBS Solicitante</th>
+                  <th>Vencimiento</th>
+                  <th>AUT. PDA</th>
+                  <th class="col-finanzas">AUTORIZACIÓN FINANZAS</th>
+                  <th class="col-finanzas">COMPROBACIÓN SALDO</th>
+                  <th class="col-finanzas">FECHA SOLIC. FINANZAS</th>
+                  <th class="col-finanzas">CONFIRMACIÓN PAGO</th>
+                  <th class="col-finanzas">REF. ASIENTO</th>
+                  <th class="col-finanzas">OBS. FINANZAS</th>
+                  <th>GRL Export</th>
+                  <th>Comprobante</th>
+                </tr>
+              </thead>
+              <tbody id="cuerpoTablaHistorico"></tbody>
+            </table>
+              </div>
+            </div>
+            <div class="planilla-scroll-y planilla-scroll-y-right" aria-label="Desplazamiento vertical">
+              <div class="planilla-scroll-y-ghost"></div>
+            </div>
+            </div>
+            <div class="planilla-scroll-x planilla-scroll-x-bottom" aria-label="Desplazamiento horizontal inferior">
+              <div class="planilla-scroll-x-ghost"></div>
+            </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="panel-eliminados" class="tab-panel" role="tabpanel">
+          <div class="toolbar">
+            <h2 class="text-xs font-bold text-slate-800 flex items-center gap-1">
+              <i class="fa-solid fa-trash-can text-red-600 text-xs"></i>
+              Registros eliminados (solo consulta)
+            </h2>
+          </div>
+          <div class="planilla-scaffold" data-planilla="eliminados">
+            <div class="planilla-main-col">
+            <div class="planilla-scroll-x planilla-scroll-x-top" aria-label="Desplazamiento horizontal superior">
+              <div class="planilla-scroll-x-ghost"></div>
+            </div>
+            <div class="planilla-scroll-xy-row">
+            <div class="planilla-scroll-x planilla-scroll-x-main">
+              <div class="planilla-table-wrap">
+            <table class="planilla-table table-tab-eliminados" aria-label="Registros eliminados">
+              <thead>
+                <tr>
+                  <th>Fecha/Hora eliminación</th>
+                  <th>Fecha/Hora Carga</th>
+                  <th>Solicitante</th>
+                  <th>Empresa</th>
+                  <th>CE</th>
+                  <th>Grupo</th>
+                  <th>Orden</th>
+                  <th>Previsión</th>
+                  <th>Monto Integración</th>
+                  <th>Ref/Cta</th>
+                  <th>Titular</th>
+                  <th>Concepto</th>
+                  <th>Desc.</th>
+                  <th>Cuotas</th>
+                  <th>Llave contra llave / doc</th>
+                  <th>Saldo</th>
+                  <th>Cta Mayor</th>
+                  <th>Adjunto</th>
+                  <th>OBS Solicitante</th>
+                  <th>Vencimiento</th>
+                  <th>AUT. PDA</th>
+                  <th class="col-finanzas">AUTORIZACIÓN FINANZAS</th>
+                  <th class="col-finanzas">COMPROBACIÓN SALDO</th>
+                  <th class="col-finanzas">FECHA SOLIC. FINANZAS</th>
+                  <th class="col-finanzas">CONFIRMACIÓN PAGO</th>
+                  <th class="col-finanzas">REF. ASIENTO</th>
+                  <th class="col-finanzas">OBS. FINANZAS</th>
+                  <th>GRL Export</th>
+                  <th>Comprobante</th>
+                </tr>
+              </thead>
+              <tbody id="cuerpoTablaEliminados"></tbody>
+            </table>
+              </div>
+            </div>
+            <div class="planilla-scroll-y planilla-scroll-y-right" aria-label="Desplazamiento vertical">
+              <div class="planilla-scroll-y-ghost"></div>
+            </div>
+            </div>
+            <div class="planilla-scroll-x planilla-scroll-x-bottom" aria-label="Desplazamiento horizontal inferior">
+              <div class="planilla-scroll-x-ghost"></div>
+            </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="modal-masivo-preview" class="modal-masivo-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-masivo-titulo" aria-hidden="true" onclick="if(event.target===this)cancelarPreviewMasivo()">
+    <div class="modal-masivo-panel" onclick="event.stopPropagation()">
+      <h3 id="modal-masivo-titulo">Vista previa · carga masiva</h3>
+      <p class="modal-masivo-hint">Revisá y editá cada pedido. Podés quitar filas con la cruz. Al confirmar, se incorporan a «Solicitudes pendientes de autorización PDA».</p>
+      <p id="bulk-preview-aviso72" class="modal-masivo-aviso72" aria-live="polite"></p>
+      <div class="modal-masivo-scroll">
+        <table class="table-masivo-preview" aria-label="Vista previa importación masiva">
+          <thead id="bulk-preview-thead"></thead>
+          <tbody id="bulk-preview-tbody"></tbody>
+        </table>
+      </div>
+      <div class="modal-masivo-actions">
+        <button type="button" class="btn btn-secondary" onclick="cancelarPreviewMasivo()">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btn-confirmar-masivo" onclick="confirmarPreviewMasivo()">Confirmar e incorporar a la planilla</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+    const API_BASE = '';
+    const PLANILLA_STORAGE_KEY = 'planilla-pda-opencars-state';
+    const ELIMINADOS_STORAGE_KEY = 'planilla-pda-opencars-eliminados';
+    const CLAVE_FINANZAS = 'Finanzas$2026';
+    const CLAVE_PDA = 'Autori$ado';
+    const CLAVE_ELIMINAR = 'eliminar$2026';
+    const DURACION_SESION_MS = 3 * 60 * 1000;
+    const MSG_FUERA_PLAZO_72HS =
+        'Fuera de plazo de procesamiento. No cumpliendo las 72hs hábiles previas, el pago está sujeto a disponibilidad de fondos.';
+    const MSG_CUMPLE_PLAZO_72HS =
+        'Dentro de plazo de procesamiento. Cumple las 72hs hábiles previas al vencimiento.';
+
+    const EMPRESAS_VALIDAS = ['Forte Car', 'Granville', 'Pampawagen'];
+    const CE_GRANVILLE_VALIDOS = ['1337', '3550', '3831', '3847'];
+    const SOLICITANTES_VALIDOS = ['Sebastian Buselli', 'Andrea Salvay', 'Avelina Tubio', 'Silvina Granero', 'Hector Montserrat'];
+    const CONCEPTOS_VALIDOS = ['12', 'VD', 'IV', 'CM', 'DA', 'GS', 'DS', 'IM', 'CE', 'CN', 'CT'];
+    const DESCRIPCIONES_VALIDAS = [
+        'Cuota Vigente', 'Deuda Vencida', 'Licitación', 'Rehabilitación parcial', 'Rehabilitación total',
+        'Cambio de modelo', 'Derecho Adjudicación', 'Gastos de sellado', 'Derecho de inscripción',
+        'Integración Mínima', 'Alícuota Extraordinaria', 'Ingresos varios', 'Cancelación anticipada', 'Cancelación total'
+    ];
+
+    /** Orden fijo: no reordenar columnas en la plantilla ni en el Excel cargado. Sin adjunto. */
+    const MASIVO_HEADERS = [
+        'Empresa',
+        'CE',
+        'Solicitante',
+        'Grupo',
+        'Orden',
+        'Previsión',
+        'Importe previsión',
+        'Monto integración',
+        'Ref/Cta pers.',
+        'Titular',
+        'Concepto',
+        'Descripción',
+        'Cuotas',
+        'Llave contra llave',
+        'Saldo en cuenta',
+        'Cuenta mayor',
+        'Fecha vencimiento',
+        'Observaciones solicitante'
+    ];
+
+    /** Filas de datos en la plantilla con Grupo/Orden preformateados como texto (Excel filas 2…N+1). */
+    const MASIVO_FILAS_FORMATO_TEXTO = 2000;
+
+    let pestanaActiva = 'carga';
+    let cargaEnCurso = false;
+    let cargaMasivaEnCurso = false;
+    let guardandoMasivoDesdePreview = false;
+    let sesionFinanzasHasta = 0;
+    let sesionPdaHasta = 0;
+    const authMasivoIds = new Set();
+
+    function escAttr(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    function escHtml(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    function urlAdjuntoSegura(url) {
+        const u = String(url ?? '').trim();
+        return u.startsWith('data:') ? u : '';
+    }
+
+    function htmlAdjuntoView(r) {
+        const url = urlAdjuntoSegura(r.adjuntoUrl);
+        if (!url) return '-';
+        return (
+            '<a href="' +
+            escAttr(url) +
+            '" download="' +
+            escAttr(r.adjuntoNombre) +
+            '" class="btn-view">👁️</a>'
+        );
+    }
+
+    function htmlComprobanteView(r) {
+        const url = urlAdjuntoSegura(r.comprobanteUrl);
+        if (!url) return '<span class="comprobante-empty">—</span>';
+        return (
+            '<a href="' +
+            escAttr(url) +
+            '" download="' +
+            escAttr(r.comprobanteNombre || 'comprobante') +
+            '" class="btn-view" title="' +
+            escAttr(r.comprobanteNombre || '') +
+            '">👁️</a>'
+        );
+    }
+
+    function htmlOptionsSelect(lista, actual) {
+        const a = String(actual ?? '');
+        return lista
+            .map((v) => {
+                const vs = String(v);
+                return '<option value="' + escAttr(vs) + '"' + (vs === a ? ' selected' : '') + '>' + escAttr(vs) + '</option>';
+            })
+            .join('');
+    }
+
+    function cerrarModalMasivoPreview() {
+        const m = document.getElementById('modal-masivo-preview');
+        if (m) {
+            m.classList.remove('is-open');
+            m.setAttribute('aria-hidden', 'true');
+        }
+        const tb = document.getElementById('bulk-preview-tbody');
+        const th = document.getElementById('bulk-preview-thead');
+        if (tb) tb.innerHTML = '';
+        if (th) th.innerHTML = '';
+        const av = document.getElementById('bulk-preview-aviso72');
+        if (av) av.textContent = '';
+    }
+
+    function onPreviewEmpresaChange(sel) {
+        const tr = sel.closest('tr');
+        if (!tr) return;
+        const ceInp = tr.querySelector('[data-col="1"]');
+        if (!ceInp) return;
+        if (sel.value === 'Granville') {
+            ceInp.readOnly = false;
+            ceInp.classList.remove('prev-inp-ro');
+            ceInp.removeAttribute('title');
+            if (String(ceInp.value).trim() === '-' || String(ceInp.value).trim() === '') ceInp.value = '';
+        } else {
+            ceInp.value = '-';
+            ceInp.readOnly = true;
+            ceInp.classList.add('prev-inp-ro');
+            ceInp.title = 'Solo Granville requiere CE';
+        }
+    }
+
+    function pintarYAbrirModalMasivo(listaFields) {
+        const thead = document.getElementById('bulk-preview-thead');
+        const tbody = document.getElementById('bulk-preview-tbody');
+        const av72 = document.getElementById('bulk-preview-aviso72');
+        if (!thead || !tbody) return;
+
+        thead.innerHTML =
+            '<tr><th class="sticky-nro">#</th>' +
+            MASIVO_HEADERS.map((h) => '<th>' + escAttr(h) + '</th>').join('') +
+            '<th>Quitar</th></tr>';
+
+        const ahoraTmp = new Date();
+        const nFuera = listaFields.filter(
+            (f) => !calcularDiferenciaHabiles(ahoraTmp, parseFechaVencimientoRegistro(f.vencimiento))
+        ).length;
+        if (av72) {
+            av72.textContent =
+                nFuera > 0
+                    ? nFuera +
+                      ' pedido(s) con vencimiento fuera de las 72 h hábiles (quedarán marcados en rojo como en la carga manual).'
+                    : '';
+        }
+
+        tbody.innerHTML = listaFields
+            .map((f, idx) => {
+                const n = idx + 1;
+                const ceRo = f.empresa !== 'Granville';
+                const ceDisplay = ceRo ? '-' : String(f.ce || '');
+                return (
+                    '<tr data-row="' +
+                    idx +
+                    '">' +
+                    '<td class="sticky-nro">' +
+                    n +
+                    '</td>' +
+                    '<td><select data-col="0" class="prev-inp" onchange="onPreviewEmpresaChange(this)">' +
+                    htmlOptionsSelect(EMPRESAS_VALIDAS, f.empresa) +
+                    '</select></td>' +
+                    '<td><input type="text" data-col="1" class="prev-inp' +
+                    (ceRo ? ' prev-inp-ro' : '') +
+                    '" value="' +
+                    escAttr(ceDisplay) +
+                    '"' +
+                    (ceRo ? ' readonly' : '') +
+                    (ceRo ? ' title="Solo Granville requiere CE"' : '') +
+                    '></td>' +
+                    '<td><select data-col="2" class="prev-inp">' +
+                    htmlOptionsSelect(SOLICITANTES_VALIDOS, f.solicitante) +
+                    '</select></td>' +
+                    '<td><input type="text" data-col="3" class="prev-inp" value="' +
+                    escAttr(f.grupo) +
+                    '"></td>' +
+                    '<td><input type="text" data-col="4" class="prev-inp" value="' +
+                    escAttr(f.orden) +
+                    '"></td>' +
+                    '<td><select data-col="5" class="prev-inp">' +
+                    htmlOptionsSelect(['NO', 'SI'], f.prevision) +
+                    '</select></td>' +
+                    '<td><input type="text" data-col="6" class="prev-inp" value="' +
+                    escAttr(f.montoPrev === '-' ? '' : f.montoPrev) +
+                    '"></td>' +
+                    '<td><input type="text" data-col="7" class="prev-inp" value="' +
+                    escAttr(f.monto === '-' ? '' : f.monto) +
+                    '"></td>' +
+                    '<td><input type="text" data-col="8" class="prev-inp" value="' +
+                    escAttr(f.cta_personal) +
+                    '"></td>' +
+                    '<td><input type="text" data-col="9" class="prev-inp" value="' +
+                    escAttr(f.titular) +
+                    '"></td>' +
+                    '<td><select data-col="10" class="prev-inp">' +
+                    htmlOptionsSelect(CONCEPTOS_VALIDOS, f.concepto) +
+                    '</select></td>' +
+                    '<td><select data-col="11" class="prev-inp">' +
+                    htmlOptionsSelect(DESCRIPCIONES_VALIDAS, f.descripcion) +
+                    '</select></td>' +
+                    '<td><input type="text" data-col="12" class="prev-inp" value="' +
+                    escAttr(f.cuotas === '-' ? '' : f.cuotas) +
+                    '"></td>' +
+                    '<td><input type="text" data-col="13" class="prev-inp" value="' +
+                    escAttr(f.respaldo === '-' ? '' : f.respaldo) +
+                    '"></td>' +
+                    '<td><input type="text" data-col="14" class="prev-inp" value="' +
+                    escAttr(f.saldo === '-' ? '' : f.saldo) +
+                    '"></td>' +
+                    '<td><input type="text" data-col="15" class="prev-inp" value="' +
+                    escAttr(f.cuenta_mayor) +
+                    '"></td>' +
+                    '<td><input type="date" data-col="16" class="prev-inp" value="' +
+                    escAttr(f.vencimiento) +
+                    '"></td>' +
+                    '<td><input type="text" data-col="17" class="prev-inp" value="' +
+                    escAttr(f.obsSolicitante === '-' ? '' : f.obsSolicitante) +
+                    '"></td>' +
+                    '<td><button type="button" class="btn-quitar-fila" onclick="this.closest(\'tr\').remove()" title="Quitar esta fila del lote">X</button></td>' +
+                    '</tr>'
+                );
+            })
+            .join('');
+
+        const m = document.getElementById('modal-masivo-preview');
+        if (m) {
+            m.classList.add('is-open');
+            m.setAttribute('aria-hidden', 'false');
+        }
+    }
+
+    function cancelarPreviewMasivo() {
+        cerrarModalMasivoPreview();
+        cargaMasivaEnCurso = false;
+        guardandoMasivoDesdePreview = false;
+        const btn = document.getElementById('btn-confirmar-masivo');
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Confirmar e incorporar a la planilla';
+        }
+    }
+
+    function ejecutarGuardadoMasivoDesdePreview(payloads) {
+        const btn = document.getElementById('btn-confirmar-masivo');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Guardando…';
+        }
+        if (useApi) {
+            (async function () {
+                try {
+                    for (let i = 0; i < payloads.length; i++) {
+                        const body = { ...payloads[i] };
+                        delete body.id;
+                        delete body.numeroOperacion;
+                        const res = await fetch(apiUrl('/api/planilla/fila'), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body)
+                        });
+                        if (!res.ok) throw new Error('Error servidor en pedido ' + (i + 1) + ' de ' + payloads.length + '.');
+                        const data = await res.json();
+                        if (data && data.row) {
+                            registros.push(normalizarRegistro(data.row));
+                        } else if (Array.isArray(data.rows)) {
+                            registros = data.rows;
+                            normalizarRegistros(registros);
+                        }
+                    }
+                    cerrarModalMasivoPreview();
+                    renderizar();
+                    alert('Carga masiva: ' + payloads.length + ' pedido(s) registrados.');
+                } catch (e) {
+                    alert(String(e.message || e));
+                    renderizar();
+                } finally {
+                    guardandoMasivoDesdePreview = false;
+                    cargaMasivaEnCurso = false;
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Confirmar e incorporar a la planilla';
+                    }
+                }
+            })();
+        } else {
+            let baseId = Date.now();
+            for (let i = 0; i < payloads.length; i++) {
+                registros.push({ ...payloads[i], id: baseId + i });
+            }
+            normalizarRegistros(registros);
+            persistState();
+            cerrarModalMasivoPreview();
+            renderizar();
+            alert('Carga masiva: ' + payloads.length + ' pedido(s) registrados.');
+            guardandoMasivoDesdePreview = false;
+            cargaMasivaEnCurso = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Confirmar e incorporar a la planilla';
+            }
+        }
+    }
+
+    function confirmarPreviewMasivo() {
+        if (guardandoMasivoDesdePreview) return;
+        const tbody = document.getElementById('bulk-preview-tbody');
+        if (!tbody) return;
+        const trs = tbody.querySelectorAll('tr');
+        if (trs.length === 0) {
+            alert('No hay filas para incorporar.');
+            return;
+        }
+        const errores = [];
+        const camposValidados = [];
+        trs.forEach((tr, idx) => {
+            const celdas = [];
+            for (let c = 0; c < 18; c++) {
+                const el = tr.querySelector('[data-col="' + c + '"]');
+                let v = '';
+                if (el) {
+                    v = el.value != null ? String(el.value).trim() : '';
+                    if (c === 1 && el.readOnly) v = '-';
+                }
+                celdas.push(v);
+            }
+            const vr = validarYExtraerFilaMasiva(celdas, idx + 1);
+            if (vr.skip) return;
+            if (!vr.ok) errores.push(vr.msg);
+            else camposValidados.push(vr.fields);
+        });
+        if (errores.length > 0) {
+            alert(
+                errores.slice(0, 14).join('\n') + (errores.length > 14 ? '\n… y ' + (errores.length - 14) + ' más.' : '')
+            );
+            return;
+        }
+        if (camposValidados.length === 0) {
+            alert('No hay filas válidas para incorporar.');
+            return;
+        }
+        const ahora = new Date();
+        const payloads = camposValidados.map((f) => buildNuevoRegistroPago(ahora, f));
+        const nFuera = payloads.filter((p) => !p.cumple72hs).length;
+        if (nFuera > 0) {
+            alert(
+                'Se incorporarán ' +
+                    payloads.length +
+                    ' pedido(s). ' +
+                    nFuera +
+                    ' con vencimiento fuera de las 72 h hábiles (mismo criterio que la carga manual).'
+            );
+        }
+        guardandoMasivoDesdePreview = true;
+        cargaMasivoEnCurso = true;
+        ejecutarGuardadoMasivoDesdePreview(payloads);
+    }
+
+    function apiUrl(path) {
+        return (API_BASE ? API_BASE.replace(/\/$/, '') : '') + path;
+    }
+
+    function esAbonado(r) {
+        return String(r.ref_asiento ?? '').trim() !== '' && String(r.conf_pago ?? '').trim() !== '';
+    }
+
+    function normalizarRegistro(r) {
+        if (r == null) return r;
+        if (r.aut_pda == null || String(r.aut_pda).trim() === '') r.aut_pda = '-';
+        if (r.fechaHoraAutPda == null || String(r.fechaHoraAutPda).trim() === '') r.fechaHoraAutPda = '-';
+        if (r.cumple72hsPda === undefined) r.cumple72hsPda = null;
+        if (r.solicitante == null || String(r.solicitante).trim() === '') r.solicitante = '-';
+        if (r.cupon == null || String(r.cupon).trim() === '-') r.cupon = '';
+        return r;
+    }
+
+    function normalizarRegistros(arr) {
+        if (!Array.isArray(arr)) return;
+        arr.forEach(normalizarRegistro);
+    }
+
+    let registros = [];
+    let registrosEliminados = [];
+    let idEditandoAdjunto = null;
+    let idEditandoComprobante = null;
+    let useApi = false;
+
+    function loadEliminados() {
+        try {
+            const saved = localStorage.getItem(ELIMINADOS_STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                registrosEliminados = Array.isArray(parsed) ? parsed : [];
+                return;
+            }
+        } catch (e) {}
+        registrosEliminados = [];
+    }
+
+    function persistEliminados() {
+        try {
+            localStorage.setItem(ELIMINADOS_STORAGE_KEY, JSON.stringify(registrosEliminados));
+        } catch (e) {}
+    }
+
+    function persistState() {
+        if (useApi) return;
+        try {
+            localStorage.setItem(PLANILLA_STORAGE_KEY, JSON.stringify(registros));
+        } catch (e) {}
+    }
+
+    function loadData() {
+        fetch(apiUrl('/api/planilla'))
+            .then((r) => (r.ok ? r.json() : Promise.reject()))
+            .then((data) => {
+                registros = Array.isArray(data.rows) ? data.rows : [];
+                normalizarRegistros(registros);
+                useApi = true;
+                renderizar();
+            })
+            .catch(() => {
+                try {
+                    const saved = localStorage.getItem(PLANILLA_STORAGE_KEY);
+                    if (saved) {
+                        registros = JSON.parse(saved);
+                        normalizarRegistros(registros);
+                        useApi = false;
+                        renderizar();
+                        return;
+                    }
+                } catch (e) {}
+                registros = [];
+                useApi = false;
+                renderizar();
+            });
+    }
+
+    function syncRow(r, revertir) {
+        syncRowSilent(r)
+            .then(() => renderizar())
+            .catch(() => {
+                if (revertir) Object.assign(r, revertir);
+                alert('Error al guardar en el servidor.');
+                renderizar();
+            });
+    }
+
+    function syncRowSilent(r) {
+        if (!useApi) {
+            persistState();
+            return Promise.resolve();
+        }
+        return fetch(apiUrl('/api/planilla/fila/' + r.id), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(r)
+        })
+            .then((res) => (res.ok ? res.json() : Promise.reject()))
+            .then((data) => {
+                if (data && data.row) {
+                    const idx = registros.findIndex((x) => x.id === r.id);
+                    if (idx >= 0) registros[idx] = normalizarRegistro(data.row);
+                }
+            });
+    }
+
+    function asegurarAccesoEliminar() {
+        const pass = prompt('Clave para eliminar:');
+        if (pass !== CLAVE_ELIMINAR) {
+            alert('Incorrecta.');
+            return false;
+        }
+        return true;
+    }
+
+    function ejecutarEliminacion(nid) {
+        const r = registros.find((reg) => reg.id === nid);
+        if (!r) return;
+
+        const copia = {
+            ...r,
+            fechaHoraEliminacion: formatoFechaHoraPlanilla(new Date())
+        };
+        registrosEliminados.push(copia);
+        persistEliminados();
+
+        if (useApi) {
+            fetch(apiUrl('/api/planilla/fila/' + nid), { method: 'DELETE' })
+                .then((res) => (res.ok ? res.json() : Promise.reject()))
+                .then((data) => {
+                    registros = data.rows || [];
+                    normalizarRegistros(registros);
+                    renderizar();
+                })
+                .catch(() => {
+                    registrosEliminados = registrosEliminados.filter(
+                        (reg) =>
+                            !(reg.id === nid && reg.fechaHoraEliminacion === copia.fechaHoraEliminacion)
+                    );
+                    persistEliminados();
+                    renderizar();
+                    alert('Error al eliminar en el servidor.');
+                });
+        } else {
+            registros = registros.filter((reg) => reg.id !== nid);
+            persistState();
+            renderizar();
+        }
+    }
+
+    function eliminarRegistro(id) {
+        const nid = Number(id);
+        const r = registros.find((reg) => reg.id === nid);
+        const detalle = r
+            ? (r.empresa || '-') + ' — Grupo ' + (r.grupo || '-') + ', Orden ' + (r.orden || '-')
+            : 'este registro';
+        if (
+            !confirm(
+                '¿Confirmás que querés eliminar esta solicitud?\n\n' +
+                    detalle +
+                    '\n\nEl registro pasará a la pestaña «Eliminados».'
+            )
+        ) {
+            return;
+        }
+        if (!asegurarAccesoEliminar()) return;
+        ejecutarEliminacion(nid);
+    }
+
+    function toggleCE() {
+        const empresa = document.getElementById('empresa').value;
+        const isGranville = empresa === 'Granville';
+        const btn = document.getElementById('btnCeGranville');
+        const wrap = document.getElementById('ceSelectWrap');
+        const ce = document.getElementById('ce');
+        const slot = document.getElementById('ceSlot');
+        btn.disabled = !isGranville;
+        if (isGranville) {
+            slot.classList.add('granville-active');
+            wrap.classList.add('ce-visible');
+            ce.disabled = false;
+        } else {
+            slot.classList.remove('granville-active');
+            wrap.classList.remove('ce-visible');
+            ce.value = '';
+            ce.disabled = true;
+        }
+    }
+
+    function focusCeSelect() {
+        const btn = document.getElementById('btnCeGranville');
+        const ce = document.getElementById('ce');
+        if (btn.disabled || ce.disabled) return;
+        ce.focus();
+    }
+
+    function togglePrevision() {
+        const prev = document.getElementById('prevision').value;
+        const montoInput = document.getElementById('monto');
+        document.getElementById('container-monto-prev').style.display = (prev === 'SI') ? 'flex' : 'none';
+        if (prev === 'SI') montoInput.removeAttribute('required');
+        else montoInput.setAttribute('required', 'true');
+    }
+
+    function limpiarFormularioPda() {
+        document.getElementById('pagoForm').reset();
+        toggleCE();
+        togglePrevision();
+    }
+
+    /** Feriados nacionales inamovibles Argentina (mes-día, todas las empresas). */
+    const FERIADOS_INAMOVIBLES_MM_DD = [
+        '01-01',
+        '03-24',
+        '04-02',
+        '05-01',
+        '05-25',
+        '06-17',
+        '06-20',
+        '07-09',
+        '08-17',
+        '10-12',
+        '11-20',
+        '12-08',
+        '12-25'
+    ];
+
+    function esFeriadoInamovible(fecha) {
+        const mm = String(fecha.getMonth() + 1).padStart(2, '0');
+        const dd = String(fecha.getDate()).padStart(2, '0');
+        return FERIADOS_INAMOVIBLES_MM_DD.includes(mm + '-' + dd);
+    }
+
+    function esHabil(fecha) {
+        return fecha.getDay() !== 0 && fecha.getDay() !== 6 && !esFeriadoInamovible(fecha);
+    }
+
+    /** true si la hora es estrictamente posterior a las 13:00:00 (13:00 exacto = antes de las 13). */
+    function cargaDespuesDeLas13(fecha) {
+        const seg =
+            fecha.getHours() * 3600 + fecha.getMinutes() * 60 + fecha.getSeconds();
+        return seg > 13 * 3600;
+    }
+
+    function primerDiaHabilEnODesde(fecha) {
+        const temp = new Date(fecha);
+        temp.setHours(0, 0, 0, 0);
+        while (!esHabil(temp)) {
+            temp.setDate(temp.getDate() + 1);
+        }
+        return temp;
+    }
+
+    function siguienteDiaHabilDespuesDe(fecha) {
+        const temp = new Date(fecha);
+        temp.setHours(0, 0, 0, 0);
+        temp.setDate(temp.getDate() + 1);
+        while (!esHabil(temp)) {
+            temp.setDate(temp.getDate() + 1);
+        }
+        return temp;
+    }
+
+    /** N-ésimo día hábil a partir de fechaInicio (inclusive), lun–vie sin feriados inamovibles. */
+    function enesimoDiaHabilDesde(fechaInicio, n) {
+        const temp = new Date(fechaInicio);
+        temp.setHours(0, 0, 0, 0);
+        let contados = 0;
+        while (contados < n) {
+            if (esHabil(temp)) contados++;
+            if (contados < n) temp.setDate(temp.getDate() + 1);
+        }
+        return temp;
+    }
+
+    /**
+     * Fecha en que se cumplen 72 h hábiles (3 días hábiles):
+     * - El día de carga no cuenta.
+     * - Antes de las 13:00 (13:00:00 inclusive): ancla = día siguiente a la carga.
+     * - Después de las 13:00: ancla = segundo día después de la carga.
+     * - Día 1 hábil = primer día hábil en o después de la ancla.
+     * - Viernes después de las 13: día 1 hábil = siguiente hábil al primer hábil de la ancla.
+     */
+    function fechaCumplimiento72hsHabiles(fechaInicio) {
+        const inicio = new Date(fechaInicio);
+        const diaCarga = new Date(inicio);
+        diaCarga.setHours(0, 0, 0, 0);
+        const ancla = new Date(diaCarga);
+        if (cargaDespuesDeLas13(inicio)) {
+            ancla.setDate(ancla.getDate() + 2);
+        } else {
+            ancla.setDate(ancla.getDate() + 1);
+        }
+        let diaUnoHabil = primerDiaHabilEnODesde(ancla);
+        if (cargaDespuesDeLas13(inicio) && diaCarga.getDay() === 5) {
+            diaUnoHabil = siguienteDiaHabilDespuesDe(diaUnoHabil);
+        }
+        return enesimoDiaHabilDesde(diaUnoHabil, 3);
+    }
+
+    /** Cumple plazo si el vencimiento es estrictamente posterior a la fecha de 72 h hábiles. */
+    function calcularDiferenciaHabiles(fechaInicio, fechaVencimiento) {
+        const fecha72 = fechaCumplimiento72hsHabiles(fechaInicio);
+        const venc = parseFechaVencimientoRegistro(fechaVencimiento);
+        venc.setHours(0, 0, 0, 0);
+        fecha72.setHours(0, 0, 0, 0);
+        return venc.getTime() > fecha72.getTime();
+    }
+
+    /** Vencimiento yyyy-mm-dd en hora local (evita corrimiento UTC). */
+    function parseFechaVencimientoRegistro(iso) {
+        const s = String(iso ?? '').trim();
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        const d = new Date(s);
+        return isNaN(d.getTime()) ? new Date() : d;
+    }
+
+    function mostrarFechaHoraAutPda(r) {
+        const fh = r.fechaHoraAutPda;
+        if (!fh || fh === '-') return '-';
+        return mostrarFechaHoraCarga(fh);
+    }
+
+    function htmlCeldaAutPdaLectura(r) {
+        const ap = escHtml(r.aut_pda || '-');
+        const fh = escHtml(mostrarFechaHoraAutPda(r));
+        const rojoFh = (r.aut_pda || '-') === 'Autorizado' && r.cumple72hsPda === false;
+        return (
+            '<span>' +
+            ap +
+            '</span><br><span class="' +
+            (rojoFh ? 'texto-rojo' : '') +
+            ' edit-timestamp">' +
+            fh +
+            '</span>'
+        );
+    }
+
+    /** Fecha y hora en es-AR forzando reloj de 24 h (evita 05:14 cuando son las 17:14 por configuración regional 12 h). */
+    function formatoFechaHoraPlanilla(fecha) {
+        const d = fecha instanceof Date ? fecha : new Date(fecha);
+        if (isNaN(d.getTime())) return '';
+        return d.toLocaleString('es-AR', {
+            day: 'numeric',
+            month: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+    }
+
+    /** Muestra fecha/hora guardada; si parece ISO (API), reformatea a 24 h. */
+    function mostrarFechaHoraCarga(val) {
+        const s = String(val ?? '').trim();
+        if (!s) return '';
+        if (/^\d{4}-\d{2}-\d{2}T/.test(s) || /^\d{4}-\d{2}-\d{2} /.test(s)) {
+            const d = new Date(s);
+            if (!isNaN(d.getTime())) return formatoFechaHoraPlanilla(d);
+        }
+        return s;
+    }
+
+    /** Parsea fecha/hora de carga guardada en la planilla (es-AR o ISO). */
+    function parseFechaHoraCargaPlanilla(val) {
+        const s = String(val ?? '').trim();
+        if (!s || s === '-') return null;
+        if (/^\d{4}-\d{2}-\d{2}T/.test(s) || /^\d{4}-\d{2}-\d{2} /.test(s)) {
+            const d = new Date(s);
+            return isNaN(d.getTime()) ? null : d;
+        }
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+        if (m) {
+            return new Date(
+                Number(m[3]),
+                Number(m[2]) - 1,
+                Number(m[1]),
+                Number(m[4]),
+                Number(m[5]),
+                m[6] ? Number(m[6]) : 0
+            );
+        }
+        const d = new Date(s);
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    /** Monto integración: sin punto (ni miles ni decimales con punto). Centavos solo con coma (ej.: 199,98 o 1234567,50). */
+    function validarMontoIntegracionFormato(raw) {
+        const s = String(raw ?? '').trim().replace(/\$/g, '').replace(/\s+/g, '');
+        if (s === '' || s === '-') return { ok: true };
+        if (s.includes('.')) {
+            return {
+                ok: false,
+                msg: 'En Monto Integración no se admite el punto (.): ni para miles (evitá 1.234,56) ni para decimales (evitá 199.98). Usá solo dígitos y, si hay centavos, la coma (,) antes de los decimales, por ejemplo 1234,56 o 199,98.'
+            };
+        }
+        if (!/^\d+(,\d{1,2})?$/.test(s)) {
+            return {
+                ok: false,
+                msg: 'Formato inválido en Monto Integración: usá solo números enteros o centavos con coma (hasta 2 decimales), por ejemplo 1234567,50 o 199,98. No uses separador de miles.'
+            };
+        }
+        return { ok: true };
+    }
+
+    if (typeof pdfjsLib !== 'undefined') {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    const RE_CUPON_FORTE_CAR = /4809\d{13}C\d{20}/;
+
+    function normalizarGrupoOrdenNum(val) {
+        const s = String(val ?? '').trim().replace(/\D/g, '');
+        if (!s) return '';
+        return s.replace(/^0+/, '') || '0';
+    }
+
+    function normalizarMontoComparable(val) {
+        const s = String(val ?? '')
+            .trim()
+            .replace(/\$/g, '')
+            .replace(/\s+/g, '')
+            .replace(/\./g, '')
+            .replace(',', '.');
+        return s;
+    }
+
+    function montosIntegracionCoinciden(montoFila, montoPdf) {
+        const a = normalizarMontoComparable(montoFila);
+        const b = normalizarMontoComparable(montoPdf);
+        if (!a || !b) return false;
+        const na = parseFloat(a);
+        const nb = parseFloat(b);
+        if (!Number.isFinite(na) || !Number.isFinite(nb)) return false;
+        return Math.abs(na - nb) < 0.005;
+    }
+
+    function parseMontoIntegracionNumero(val) {
+        const s = normalizarMontoComparable(val);
+        if (!s || s === '-') return 0;
+        const n = parseFloat(s);
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    function formatoMontoIntegracionTotal(total) {
+        const n = Number.isFinite(total) ? total : 0;
+        return (
+            '$ ' +
+            n.toLocaleString('es-AR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            })
+        );
+    }
+
+    function sumarMontosIntegracionSeleccionadosFinanzas() {
+        let suma = 0;
+        authMasivoIds.forEach((id) => {
+            const r = registros.find((reg) => reg.id === id);
+            if (r && esAuthMasivoFinanzasSeleccionable(r)) {
+                suma += parseMontoIntegracionNumero(r.monto);
+            }
+        });
+        return suma;
+    }
+
+    function dataUrlPdfAUint8Array(dataUrl) {
+        const base64 = String(dataUrl).split(',')[1] || '';
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+    }
+
+    async function extraerTextoPdfPrimeraPagina(adjuntoUrl) {
+        if (typeof pdfjsLib === 'undefined' || !adjuntoUrl) return '';
+        const data = dataUrlPdfAUint8Array(adjuntoUrl);
+        const pdf = await pdfjsLib.getDocument({ data }).promise;
+        const page = await pdf.getPage(1);
+        const content = await page.getTextContent();
+        return content.items.map((item) => item.str).join(' ');
+    }
+
+    function extraerGrupoOrdenPdf(texto) {
+        const re = /Grupo\s*-\s*Orden\s*:?\s*(\d+)\s*[-–]\s*(\d+)/gi;
+        let m;
+        while ((m = re.exec(texto)) !== null) {
+            return { grupo: m[1], orden: m[2] };
+        }
+        return null;
+    }
+
+    function grupoOrdenCoincidenConPdf(grupoFila, ordenFila, grupoPdf, ordenPdf) {
+        return (
+            normalizarGrupoOrdenNum(grupoFila) === normalizarGrupoOrdenNum(grupoPdf) &&
+            normalizarGrupoOrdenNum(ordenFila) === normalizarGrupoOrdenNum(ordenPdf)
+        );
+    }
+
+    function buscarCuponForteCarEnTexto(texto) {
+        const compacto = String(texto || '').replace(/\s+/g, '');
+        const m = compacto.match(RE_CUPON_FORTE_CAR);
+        return m ? m[0] : '';
+    }
+
+    function extraerMontoDebinPampawagen(texto) {
+        const patrones = [
+            /TOTAL\s+ARS\s*([\d.]+,\d{2})/gi,
+            /TOTAL[\s\S]{0,80}?ARS\s*([\d.]+,\d{2})/gi
+        ];
+        for (const re of patrones) {
+            const matches = [...String(texto || '').matchAll(re)];
+            if (matches.length) return matches[matches.length - 1][1].trim();
+        }
+        return '';
+    }
+
+    function requiereCuponEmpresa(empresa) {
+        return empresa === 'Forte Car' || empresa === 'Pampawagen';
+    }
+
+    async function extraerCuponDesdeAdjuntoPdfDetalle(empresa, adjuntoUrl, adjuntoNombre, grupo, orden, monto) {
+        if (!requiereCuponEmpresa(empresa)) return { cupon: '', motivo: '' };
+        if (!adjuntoUrl || !adjuntoNombre || adjuntoNombre === '-') {
+            return { cupon: '', motivo: 'sin_adjunto' };
+        }
+        if (!String(adjuntoNombre).toLowerCase().endsWith('.pdf')) {
+            return { cupon: '', motivo: 'no_pdf' };
+        }
+        if (typeof pdfjsLib === 'undefined') {
+            return { cupon: '', motivo: 'pdfjs_no_disponible' };
+        }
+        try {
+            const texto = await extraerTextoPdfPrimeraPagina(adjuntoUrl);
+            if (!texto || !String(texto).trim()) {
+                return { cupon: '', motivo: 'pdf_sin_texto' };
+            }
+
+            if (empresa === 'Forte Car') {
+                const cupon = buscarCuponForteCarEnTexto(texto);
+                if (!cupon) return { cupon: '', motivo: 'codigo_no_encontrado' };
+                const goPdf = extraerGrupoOrdenPdf(texto);
+                if (!goPdf) return { cupon: '', motivo: 'grupo_orden_ausente_pdf' };
+                if (!grupoOrdenCoincidenConPdf(grupo, orden, goPdf.grupo, goPdf.orden)) {
+                    return {
+                        cupon: '',
+                        motivo: 'grupo_orden_no_coincide',
+                        extra: 'PDF: ' + goPdf.grupo + '-' + goPdf.orden + ', fila: ' + grupo + '-' + orden
+                    };
+                }
+                return { cupon, motivo: '' };
+            }
+
+            if (empresa === 'Pampawagen') {
+                const montoPdf = extraerMontoDebinPampawagen(texto);
+                if (!montoPdf) return { cupon: '', motivo: 'monto_debin_no_encontrado' };
+                if (!montosIntegracionCoinciden(monto, montoPdf)) {
+                    return {
+                        cupon: '',
+                        motivo: 'monto_no_coincide',
+                        extra: 'PDF: ' + montoPdf + ', fila: ' + monto
+                    };
+                }
+                return { cupon: montoPdf, motivo: '' };
+            }
+
+            return { cupon: '', motivo: '' };
+        } catch (e) {
+            return {
+                cupon: '',
+                motivo: 'error_lectura',
+                extra: e && e.message ? String(e.message) : String(e)
+            };
+        }
+    }
+
+    async function extraerCuponDesdeAdjuntoPdf(empresa, adjuntoUrl, adjuntoNombre, grupo, orden, monto) {
+        const det = await extraerCuponDesdeAdjuntoPdfDetalle(
+            empresa,
+            adjuntoUrl,
+            adjuntoNombre,
+            grupo,
+            orden,
+            monto
+        );
+        return det.cupon || '';
+    }
+
+    function mensajeExtraccionCuponFallida(empresa, det) {
+        if (!det || !det.motivo) return '';
+        const suf = det.extra ? ' (' + det.extra + ').' : '.';
+        switch (det.motivo) {
+            case 'no_pdf':
+                return 'El adjunto no es PDF. Para ' + empresa + ' hace falta un PDF para extraer el cupón de pago.';
+            case 'pdfjs_no_disponible':
+                return 'No se pudo cargar el lector PDF. Recargá la página e intentá de nuevo.';
+            case 'pdf_sin_texto':
+                return 'No se pudo leer texto del PDF (¿escaneado sin OCR?).';
+            case 'codigo_no_encontrado':
+                return 'No se encontró el código de cupón Forte Car en el PDF.';
+            case 'grupo_orden_ausente_pdf':
+                return 'No se encontró Grupo-Orden en el PDF.';
+            case 'grupo_orden_no_coincide':
+                return 'El Grupo-Orden del PDF no coincide con la fila' + suf;
+            case 'monto_debin_no_encontrado':
+                return 'No se encontró TOTAL ARS en el comprobante DEBIN.';
+            case 'monto_no_coincide':
+                return 'El monto del DEBIN no coincide con Monto Integración' + suf;
+            case 'error_lectura':
+                return 'Error al leer el PDF' + (det.extra ? ': ' + det.extra : '') + '.';
+            default:
+                return 'No se pudo extraer el cupón de pago del adjunto.';
+        }
+    }
+
+    async function aplicarExtraccionCuponRegistro(r, opciones) {
+        const avisar = !opciones || opciones.avisarSiFalla !== false;
+        if (!requiereCuponEmpresa(r.empresa)) {
+            r.cupon = '';
+            return { cupon: '', motivo: '' };
+        }
+        const det = await extraerCuponDesdeAdjuntoPdfDetalle(
+            r.empresa,
+            r.adjuntoUrl,
+            r.adjuntoNombre,
+            r.grupo,
+            r.orden,
+            r.monto
+        );
+        r.cupon = det.cupon || '';
+        if (avisar && det.motivo && r.adjuntoUrl) {
+            const pref =
+                r.empresa + ' (Grupo ' + r.grupo + ', Orden ' + r.orden + '): ';
+            alert(pref + mensajeExtraccionCuponFallida(r.empresa, det));
+        }
+        return det;
+    }
+
+    function htmlIndicadorCupon(r) {
+        if (!requiereCuponEmpresa(r.empresa)) return '';
+        const cupon = String(r.cupon ?? '').trim();
+        if (cupon) {
+            const corto = cupon.length > 18 ? cupon.slice(0, 15) + '…' : cupon;
+            return (
+                '<span class="cupon-badge cupon-ok" title="Cupón: ' +
+                escAttr(cupon) +
+                '">✓ ' +
+                escHtml(corto) +
+                '</span>'
+            );
+        }
+        if (
+            r.adjuntoUrl &&
+            r.adjuntoNombre &&
+            String(r.adjuntoNombre).toLowerCase().endsWith('.pdf')
+        ) {
+            return '<span class="cupon-badge cupon-pendiente" title="PDF adjunto pero cupón no detectado">⚠ Sin cupón</span>';
+        }
+        return '';
+    }
+
+    /** Construye el objeto de fila nuevo (misma forma que carga manual). */
+    function buildNuevoRegistroPago(ahora, f) {
+        const cumple72hs = calcularDiferenciaHabiles(ahora, parseFechaVencimientoRegistro(f.vencimiento));
+        return {
+            fechaHora: formatoFechaHoraPlanilla(ahora),
+            solicitante: f.solicitante,
+            empresa: f.empresa,
+            ce: f.ce || '-',
+            grupo: f.grupo,
+            orden: f.orden,
+            prevision: f.prevision,
+            montoPrev: f.montoPrev || '-',
+            monto: f.monto || '-',
+            fechaEdicionMonto: '-',
+            fechaEdicionCtaPersonal: '-',
+            fechaEdicionCuentaMayor: '-',
+            cta_personal: f.cta_personal,
+            titular: f.titular,
+            concepto: f.concepto,
+            descripcion: f.descripcion,
+            cuotas: f.cuotas || '-',
+            respaldo: f.respaldo || '-',
+            saldo: f.saldo || '-',
+            cuenta_mayor: f.cuenta_mayor,
+            obsSolicitante: f.obsSolicitante || '-',
+            adjuntoNombre: f.adjuntoNombre != null ? f.adjuntoNombre : '-',
+            adjuntoUrl: f.adjuntoUrl != null ? f.adjuntoUrl : null,
+            cupon: f.cupon != null && String(f.cupon).trim() !== '' ? String(f.cupon).trim() : '',
+            fechaEdicionAdjunto: '-',
+            comprobanteNombre: '-',
+            comprobanteUrl: null,
+            fechaEdicionComprobante: '-',
+            vencimiento: f.vencimiento,
+            cumple72hs: cumple72hs,
+            fechaHoraAutPda: '-',
+            cumple72hsPda: null,
+            aut_finanzas: '-',
+            comp_saldo: '-',
+            fecha_solic: '',
+            conf_pago: '',
+            ref_asiento: '',
+            obsFinanzas: '',
+            aut_pda: '-'
+        };
+    }
+
+    function celdaAString(v) {
+        if (v == null || v === '') return '';
+        if (typeof v === 'number' && !Number.isNaN(v)) {
+            if (Math.abs(v) > 1e12) return String(Math.trunc(v));
+            if (Number.isInteger(v) && String(Math.abs(v)).length >= 9) return String(v);
+            return String(v);
+        }
+        return String(v).trim();
+    }
+
+    /** Lee Grupo/Orden del libro: prioriza texto mostrado (w) y celdas guardadas como texto. */
+    function leerCeldaTextoGrupoOrden(ws, row0, col0) {
+        if (!ws) return '';
+        const addr = XLSX.utils.encode_cell({ r: row0, c: col0 });
+        const cell = ws[addr];
+        if (!cell) return '';
+        if (cell.w != null && String(cell.w).trim() !== '') return String(cell.w).trim();
+        if (cell.t === 's' || cell.t === 'str') return String(cell.v != null ? cell.v : '').trim();
+        if (typeof cell.v === 'number' && !Number.isNaN(cell.v)) return String(cell.v);
+        if (cell.v != null) return String(cell.v).trim();
+        return '';
+    }
+
+    /** Convierte número interno de Excel (100.64) al formato argentino esperado (100,64). */
+    function numeroExcelAMontoArgentino(n) {
+        if (!Number.isFinite(n)) return '';
+        const rounded = Math.round(n * 100) / 100;
+        if (Number.isInteger(rounded)) return String(rounded);
+        const parts = rounded.toFixed(2).split('.');
+        const dec = parts[1].replace(/0+$/, '');
+        return dec === '' ? parts[0] : parts[0] + ',' + dec;
+    }
+
+    /** Normaliza texto de monto leído de Excel (quita miles con punto; 100.64 → 100,64). */
+    function normalizarMontoArgentinoDesdeTexto(s) {
+        let t = String(s ?? '').trim().replace(/\$/g, '').replace(/\s+/g, '');
+        if (t === '' || t === '-') return '';
+        if (/,/.test(t)) return t.replace(/\./g, '');
+        if (/^\d+$/.test(t)) return t;
+        if (/^\d+\.\d{1,2}$/.test(t)) return t.replace('.', ',');
+        if (/^\d{1,3}(\.\d{3})+$/.test(t)) return t.replace(/\./g, '');
+        return t;
+    }
+
+    /** Lee Importe previsión / Monto integración: prioriza lo que muestra Excel, no el número interno. */
+    function leerCeldaMontoMasivo(ws, row0, col0) {
+        if (!ws) return '';
+        const addr = XLSX.utils.encode_cell({ r: row0, c: col0 });
+        const cell = ws[addr];
+        if (!cell) return '';
+        if (cell.w != null && String(cell.w).trim() !== '') {
+            return normalizarMontoArgentinoDesdeTexto(String(cell.w).trim());
+        }
+        if (cell.t === 's' || cell.t === 'str') {
+            return normalizarMontoArgentinoDesdeTexto(String(cell.v != null ? cell.v : '').trim());
+        }
+        if (typeof cell.v === 'number' && !Number.isNaN(cell.v)) {
+            return numeroExcelAMontoArgentino(cell.v);
+        }
+        if (cell.v != null) return normalizarMontoArgentinoDesdeTexto(String(cell.v).trim());
+        return '';
+    }
+
+    /** Formato texto (@) en columnas sensibles para N filas de datos bajo el encabezado. */
+    function aplicarFormatoTextoGrupoOrdenPlantilla(ws) {
+        const COL_GRUPO = 3;
+        const COL_ORDEN = 4;
+        const COL_MONTO_PREV = 6;
+        const COL_MONTO_INT = 7;
+        const lastC = MASIVO_HEADERS.length - 1;
+        const lastDataRow = MASIVO_FILAS_FORMATO_TEXTO;
+        for (let r = 1; r <= lastDataRow; r++) {
+            for (const c of [COL_GRUPO, COL_ORDEN, COL_MONTO_PREV, COL_MONTO_INT]) {
+                const addr = XLSX.utils.encode_cell({ r, c });
+                if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+                ws[addr].z = '@';
+            }
+        }
+        ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: lastDataRow, c: lastC } });
+    }
+
+    /** Serial Excel (día) → yyyy-mm-dd (UTC medianoche). */
+    function excelSerialAISO(serial) {
+        const s = Number(serial);
+        if (!Number.isFinite(s)) return null;
+        const epoch = Date.UTC(1899, 11, 30);
+        const ms = epoch + Math.round(s * 86400000);
+        const d = new Date(ms);
+        if (isNaN(d.getTime())) return null;
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    function parseFechaVencimientoMasivo(val) {
+        if (val == null || val === '') return { ok: false, msg: 'Fecha vencimiento vacía.' };
+        if (typeof val === 'number' && !Number.isNaN(val)) {
+            const iso = excelSerialAISO(val);
+            if (iso) return { ok: true, iso };
+        }
+        const s = celdaAString(val);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return { ok: true, iso: s };
+        const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        if (m) {
+            const dd = m[1].padStart(2, '0');
+            const mm = m[2].padStart(2, '0');
+            const yyyy = m[3];
+            return { ok: true, iso: `${yyyy}-${mm}-${dd}` };
+        }
+        return { ok: false, msg: 'Fecha vencimiento no reconocida: "' + s + '". Usá yyyy-mm-dd, dd/mm/aaaa o fecha de Excel.' };
+    }
+
+    function esFilaMasivaVacia(arr) {
+        if (!arr || arr.length === 0) return true;
+        return arr.every((c) => !celdaAString(c));
+    }
+
+    function validarYExtraerFilaMasiva(celdas, nroFilaExcel) {
+        const pref = 'Fila ' + nroFilaExcel + ': ';
+        const g = (i) => celdaAString(celdas[i]);
+        const empresa = g(0);
+        let ce = g(1);
+        const solicitante = g(2);
+        const grupo = g(3);
+        const orden = g(4);
+        let prevision = g(5).toUpperCase();
+        if (prevision === 'SÍ') prevision = 'SI';
+        const montoPrevRaw = g(6);
+        const montoRaw = g(7);
+        const cta_personal = g(8);
+        const titular = g(9);
+        const concepto = g(10);
+        const descripcion = g(11);
+        const cuotas = g(12);
+        const respaldo = g(13);
+        const saldo = g(14);
+        const cuenta_mayor = g(15);
+        const fechaRaw = celdas[16];
+        const obsSolicitante = g(17);
+
+        if (!empresa && !grupo && !orden) return { skip: true };
+
+        if (!EMPRESAS_VALIDAS.includes(empresa)) {
+            return { ok: false, msg: pref + 'Empresa inválida. Usá: ' + EMPRESAS_VALIDAS.join(', ') + '.' };
+        }
+        if (empresa === 'Granville') {
+            ce = ce.replace(/\s+/g, '');
+            if (!CE_GRANVILLE_VALIDOS.includes(ce)) {
+                return { ok: false, msg: pref + 'Para Granville el CE debe ser uno de: ' + CE_GRANVILLE_VALIDOS.join(', ') + '.' };
+            }
+        } else {
+            ce = '-';
+        }
+        if (!SOLICITANTES_VALIDOS.includes(solicitante)) {
+            return { ok: false, msg: pref + 'Solicitante inválido. Usá el nombre exacto de la lista.' };
+        }
+        if (!grupo) return { ok: false, msg: pref + 'Grupo obligatorio.' };
+        if (!orden) return { ok: false, msg: pref + 'Orden obligatorio.' };
+        if (prevision !== 'NO' && prevision !== 'SI') {
+            return { ok: false, msg: pref + 'Previsión debe ser NO o SI.' };
+        }
+        if (prevision === 'SI' && !String(montoPrevRaw).trim()) {
+            return { ok: false, msg: pref + 'Con Previsión SI, completá Importe previsión.' };
+        }
+        if (prevision === 'NO') {
+            if (!String(montoRaw).trim()) return { ok: false, msg: pref + 'Monto integración obligatorio si Previsión es NO.' };
+            const chk = validarMontoIntegracionFormato(montoRaw);
+            if (!chk.ok) return { ok: false, msg: pref + chk.msg };
+        } else {
+            if (String(montoRaw).trim()) {
+                const chk = validarMontoIntegracionFormato(montoRaw);
+                if (!chk.ok) return { ok: false, msg: pref + chk.msg };
+            }
+        }
+        if (!cta_personal) return { ok: false, msg: pref + 'Ref/Cta pers. obligatorio.' };
+        if (!titular) return { ok: false, msg: pref + 'Titular obligatorio.' };
+        if (!CONCEPTOS_VALIDOS.includes(concepto)) {
+            return { ok: false, msg: pref + 'Concepto inválido: "' + concepto + '".' };
+        }
+        if (!DESCRIPCIONES_VALIDAS.includes(descripcion)) {
+            return { ok: false, msg: pref + 'Descripción inválida. Debe coincidir exacto con una opción del formulario.' };
+        }
+        if (!cuenta_mayor) return { ok: false, msg: pref + 'Cuenta mayor obligatoria.' };
+        const fp = parseFechaVencimientoMasivo(fechaRaw);
+        if (!fp.ok) return { ok: false, msg: pref + fp.msg };
+
+        return {
+            ok: true,
+            fields: {
+                empresa,
+                ce,
+                solicitante,
+                grupo,
+                orden,
+                prevision,
+                montoPrev: String(montoPrevRaw).trim() || '-',
+                monto: String(montoRaw).trim() || '-',
+                cta_personal,
+                titular,
+                concepto,
+                descripcion,
+                cuotas: String(cuotas).trim() || '-',
+                respaldo: String(respaldo).trim() || '-',
+                saldo: String(saldo).trim() || '-',
+                cuenta_mayor,
+                obsSolicitante: String(obsSolicitante).trim() || '-',
+                vencimiento: fp.iso,
+                adjuntoNombre: '-',
+                adjuntoUrl: null
+            }
+        };
+    }
+
+    function descargarPlantillaMasiva() {
+        const h = [MASIVO_HEADERS];
+        const ayuda = [
+            { Campo: 'Empresa', Valores: EMPRESAS_VALIDAS.join(' | ') },
+            { Campo: 'CE', Valores: 'Granville: ' + CE_GRANVILLE_VALIDOS.join(', ') + '. Otras empresas: dejar vacío o -' },
+            { Campo: 'Solicitante', Valores: SOLICITANTES_VALIDOS.join(' | ') },
+            { Campo: 'Grupo / Orden', Valores: 'Columnas con formato texto en la hoja Pedidos (cualquier texto; conservan ceros a la izquierda si Excel guardó la celda como texto).' },
+            { Campo: 'Previsión', Valores: 'NO | SI' },
+            { Campo: 'Importe previsión / Monto integración', Valores: 'Decimales con coma (ej.: 100,64). En la plantilla van como texto; si Excel los guardó como número, la importación los convierte automáticamente.' },
+            { Campo: 'Fecha vencimiento', Valores: 'yyyy-mm-dd o dd/mm/aaaa (o fecha Excel)' },
+            { Campo: 'Concepto', Valores: CONCEPTOS_VALIDOS.join(' | ') },
+            { Campo: 'Descripción', Valores: 'Texto exacto de la lista del formulario (ver hoja Listas).' }
+        ];
+        const listas = DESCRIPCIONES_VALIDAS.map((d) => ({ Descripción: d }));
+        const ws = XLSX.utils.aoa_to_sheet(h);
+        aplicarFormatoTextoGrupoOrdenPlantilla(ws);
+        const wsAyuda = XLSX.utils.json_to_sheet(ayuda);
+        const wsListas = XLSX.utils.json_to_sheet(listas);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Pedidos');
+        XLSX.utils.book_append_sheet(wb, wsAyuda, 'Instrucciones');
+        XLSX.utils.book_append_sheet(wb, wsListas, 'Listas descripciones');
+        XLSX.writeFile(wb, 'Plantilla_carga_masiva_PDA.xlsx');
+    }
+
+    function procesarArchivoMasivo(input) {
+        const file = input.files && input.files[0];
+        input.value = '';
+        if (!file || cargaMasivaEnCurso) return;
+        cargaMasivaEnCurso = true;
+        const reader = new FileReader();
+        reader.onload = function (ev) {
+            try {
+                const data = new Uint8Array(ev.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+                if (!aoa || aoa.length < 2) {
+                    alert('El archivo no tiene filas de datos (solo encabezados o vacío).');
+                    cargaMasivaEnCurso = false;
+                    return;
+                }
+                const encabezado = aoa[0].map((c) => celdaAString(c));
+                const mismatch = MASIVO_HEADERS.some((esperado, i) => {
+                    const leido = String(encabezado[i] != null ? encabezado[i] : '')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .toLowerCase();
+                    return leido !== esperado.replace(/\s+/g, ' ').trim().toLowerCase();
+                });
+                if (mismatch) {
+                    alert(
+                        'La primera fila debe ser exactamente la plantilla descargada (mismos títulos y orden de columnas). Descargá «Plantilla Excel» y no reordenes ni renombres columnas.'
+                    );
+                    cargaMasivaEnCurso = false;
+                    return;
+                }
+                const filasParaVista = [];
+                const errores = [];
+                for (let r = 1; r < aoa.length; r++) {
+                    const fila = aoa[r] || [];
+                    const celdas = MASIVO_HEADERS.map((_, i) => fila[i]);
+                    celdas[3] = leerCeldaTextoGrupoOrden(ws, r, 3);
+                    celdas[4] = leerCeldaTextoGrupoOrden(ws, r, 4);
+                    celdas[6] = leerCeldaMontoMasivo(ws, r, 6);
+                    celdas[7] = leerCeldaMontoMasivo(ws, r, 7);
+                    if (esFilaMasivaVacia(celdas)) continue;
+                    const vr = validarYExtraerFilaMasiva(celdas, r + 1);
+                    if (vr.skip) continue;
+                    if (!vr.ok) {
+                        errores.push(vr.msg);
+                        continue;
+                    }
+                    filasParaVista.push(vr.fields);
+                }
+                if (errores.length > 0) {
+                    alert(errores.slice(0, 12).join('\n') + (errores.length > 12 ? '\n… y ' + (errores.length - 12) + ' más.' : ''));
+                    cargaMasivaEnCurso = false;
+                    return;
+                }
+                if (filasParaVista.length === 0) {
+                    alert('No hay filas con datos para importar.');
+                    cargaMasivaEnCurso = false;
+                    return;
+                }
+                pintarYAbrirModalMasivo(filasParaVista);
+                cargaMasivaEnCurso = false;
+            } catch (err) {
+                alert('No se pudo procesar el Excel: ' + (err && err.message ? err.message : String(err)));
+                cargaMasivaEnCurso = false;
+            }
+        };
+        reader.onerror = function () {
+            alert('Error al leer el archivo.');
+            cargaMasivaEnCurso = false;
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function procesarCarga() {
+        if (cargaEnCurso) return;
+        const form = document.getElementById('pagoForm');
+        if (!form.checkValidity()) return alert("Campos obligatorios incompletos.");
+
+        const montoRaw = document.getElementById('monto').value;
+        const chkMonto = validarMontoIntegracionFormato(montoRaw);
+        if (!chkMonto.ok) {
+            alert(chkMonto.msg);
+            document.getElementById('monto').focus();
+            return;
+        }
+
+        const venc = document.getElementById('vencimiento').value;
+        const ahora = new Date();
+        const cumple72hs = calcularDiferenciaHabiles(ahora, parseFechaVencimientoRegistro(venc));
+
+        if (!cumple72hs) alert(MSG_FUERA_PLAZO_72HS);
+        else alert(MSG_CUMPLE_PLAZO_72HS);
+
+        const fileInput = document.getElementById('adjunto');
+
+        cargaEnCurso = true;
+        const btnCargar = document.querySelector('button[onclick="procesarCarga()"]');
+        if (btnCargar) btnCargar.disabled = true;
+
+        async function enviarFila(adjuntoNombre, adjuntoUrl) {
+            try {
+            const fields = {
+                solicitante: document.getElementById('solicitante').value,
+                empresa: document.getElementById('empresa').value,
+                ce: document.getElementById('ce').value || '-',
+                grupo: document.getElementById('grupo').value,
+                orden: document.getElementById('orden').value,
+                prevision: document.getElementById('prevision').value,
+                montoPrev: document.getElementById('monto_prev').value || '-',
+                monto: document.getElementById('monto').value || '-',
+                cta_personal: document.getElementById('cta_personal').value,
+                titular: document.getElementById('titular').value,
+                concepto: document.getElementById('concepto').value,
+                descripcion: document.getElementById('descripcion').value,
+                cuotas: document.getElementById('cuotas').value || '-',
+                respaldo: document.getElementById('respaldo').value || '-',
+                saldo: document.getElementById('saldo').value || '-',
+                cuenta_mayor: document.getElementById('cuenta_mayor').value,
+                obsSolicitante: document.getElementById('observaciones_carga').value || '-',
+                vencimiento: venc,
+                adjuntoNombre: adjuntoNombre || '-',
+                adjuntoUrl: adjuntoUrl || null,
+                cupon: ''
+            };
+            if (adjuntoUrl && adjuntoNombre && requiereCuponEmpresa(fields.empresa)) {
+                await aplicarExtraccionCuponRegistro(fields, { avisarSiFalla: true });
+            }
+            const nuevo = buildNuevoRegistroPago(ahora, fields);
+
+            if (useApi) {
+                const payload = { ...nuevo };
+                delete payload.id;
+                delete payload.numeroOperacion;
+                fetch(apiUrl('/api/planilla/fila'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                    .then((r) => (r.ok ? r.json() : Promise.reject()))
+                    .then((data) => {
+                        if (data && data.row) {
+                            registros.push(normalizarRegistro(data.row));
+                        } else if (Array.isArray(data.rows)) {
+                            registros = data.rows;
+                            normalizarRegistros(registros);
+                        }
+                        renderizar();
+                        form.reset();
+                        toggleCE();
+                        togglePrevision();
+                    })
+                    .catch(() => alert('Error al guardar en el servidor.'))
+                    .finally(() => {
+                        cargaEnCurso = false;
+                        if (btnCargar) btnCargar.disabled = false;
+                    });
+            } else {
+                nuevo.id = Date.now();
+                registros.push(nuevo);
+                persistState();
+                renderizar();
+                form.reset();
+                toggleCE();
+                togglePrevision();
+                cargaEnCurso = false;
+                if (btnCargar) btnCargar.disabled = false;
+            }
+            } catch (e) {
+                cargaEnCurso = false;
+                if (btnCargar) btnCargar.disabled = false;
+                throw e;
+            }
+        }
+
+        if (fileInput.files.length > 0) {
+            const reader = new FileReader();
+            reader.onload = async function (ev) {
+                try {
+                    await enviarFila(fileInput.files[0].name, ev.target.result);
+                } catch (e) {
+                    alert('Error al procesar la carga.');
+                }
+            };
+            reader.onerror = function () {
+                cargaEnCurso = false;
+                if (btnCargar) btnCargar.disabled = false;
+                alert('Error al leer el adjunto.');
+            };
+            reader.readAsDataURL(fileInput.files[0]);
+        } else {
+            enviarFila('-', null).catch(() => alert('Error al procesar la carga.'));
+        }
+    }
+
+    function iniciarEdicionMonto(id) {
+        const r = registros.find((reg) => reg.id === id);
+        if (!r || r.aut_finanzas === "Autorizado") return alert("Bloqueado.");
+        const actual = r.monto != null && String(r.monto).trim() !== '-' ? String(r.monto) : '';
+        const nVal = prompt(
+            "Editar Monto Integración (sin punto; centavos con coma, ej.: 199,98):",
+            actual
+        );
+        if (nVal === null) return;
+        const trimmed = String(nVal).trim();
+        if (r.prevision === "NO" && !trimmed.replace(/\$/g, "").replace(/\s+/g, "")) {
+            return alert("Monto integración obligatorio si Previsión es NO.");
+        }
+        const chk = validarMontoIntegracionFormato(trimmed);
+        if (!chk.ok) {
+            alert(chk.msg);
+            return;
+        }
+        r.monto = trimmed ? trimmed.replace(/\$/g, "").replace(/\s+/g, "") : "-";
+        r.fechaEdicionMonto = formatoFechaHoraPlanilla(new Date());
+        syncRow(r);
+    }
+
+    function iniciarEdicionAdjunto(id) {
+        const r = registros.find((reg) => reg.id === id);
+        if (!r || r.aut_finanzas === "Autorizado") return alert("Bloqueado.");
+        idEditandoAdjunto = id;
+        document.getElementById('input-file-edit').click();
+    }
+
+    function puedeEditarAntesAutPda(r) {
+        if (!r) return false;
+        return (r.aut_pda || "-") !== "Autorizado";
+    }
+
+    function iniciarEdicionCtaPersonal(id) {
+        const r = registros.find((reg) => reg.id === id);
+        if (!puedeEditarAntesAutPda(r)) return alert("Bloqueado: ya autorizado por PDA.");
+        const nVal = prompt("Editar Ref/Cta Pers.:", r.cta_personal);
+        if (nVal === null) return;
+        const trimmed = String(nVal).trim();
+        if (!trimmed) return alert("Ref/Cta Pers. es obligatorio.");
+        r.cta_personal = trimmed;
+        r.fechaEdicionCtaPersonal = formatoFechaHoraPlanilla(new Date());
+        syncRow(r);
+    }
+
+    function iniciarEdicionCuentaMayor(id) {
+        const r = registros.find((reg) => reg.id === id);
+        if (!puedeEditarAntesAutPda(r)) return alert("Bloqueado: ya autorizado por PDA.");
+        const nVal = prompt("Editar Cuenta Mayor:", r.cuenta_mayor);
+        if (nVal === null) return;
+        const trimmed = String(nVal).trim();
+        if (!trimmed) return alert("Cuenta Mayor es obligatorio.");
+        r.cuenta_mayor = trimmed;
+        r.fechaEdicionCuentaMayor = formatoFechaHoraPlanilla(new Date());
+        syncRow(r);
+    }
+
+    function finalizarEdicionAdjunto(input) {
+        if (input.files.length > 0 && idEditandoAdjunto) {
+            const r = registros.find((reg) => reg.id === idEditandoAdjunto);
+            if (!r) return;
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onload = async function (ev) {
+                r.adjuntoNombre = file.name;
+                r.adjuntoUrl = ev.target.result;
+                r.fechaEdicionAdjunto = formatoFechaHoraPlanilla(new Date());
+                await aplicarExtraccionCuponRegistro(r, { avisarSiFalla: true });
+                idEditandoAdjunto = null;
+                input.value = '';
+                syncRow(r);
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    function puedeEditarComprobanteFinanzas(r) {
+        return (
+            r &&
+            (r.aut_pda || '-') === 'Autorizado' &&
+            !esAbonado(r)
+        );
+    }
+
+    function iniciarEdicionComprobante(id) {
+        const r = registros.find((reg) => reg.id === id);
+        if (!puedeEditarComprobanteFinanzas(r)) {
+            return alert('El comprobante solo puede subirse o reemplazarse en la pestaña Finanzas (antes de pasar a Abonados).');
+        }
+        idEditandoComprobante = id;
+        document.getElementById('input-file-comprobante-edit').click();
+    }
+
+    function finalizarEdicionComprobante(input) {
+        if (input.files.length > 0 && idEditandoComprobante) {
+            const r = registros.find((reg) => reg.id === idEditandoComprobante);
+            if (!puedeEditarComprobanteFinanzas(r)) {
+                idEditandoComprobante = null;
+                input.value = '';
+                return;
+            }
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onload = function (ev) {
+                r.comprobanteNombre = file.name;
+                r.comprobanteUrl = ev.target.result;
+                r.fechaEdicionComprobante = formatoFechaHoraPlanilla(new Date());
+                idEditandoComprobante = null;
+                input.value = '';
+                syncRow(r);
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    const grlSeleccionIds = new Set();
+
+    function esGrlSeleccionable(r) {
+        return (
+            r.empresa === 'Granville' &&
+            (r.aut_pda || '-') === 'Autorizado' &&
+            r.aut_finanzas === 'Autorizado' &&
+            !esAbonado(r)
+        );
+    }
+
+    function buildFilaGranvilleExport(r) {
+        const imp = String(r.monto).replace('$', '').replace(/\./g, '').replace(',', '.').trim();
+        const [y, m, d] = r.vencimiento.split('-');
+        let cuotas = r.cuotas;
+        if (cuotas == null || String(cuotas).trim() === '' || String(cuotas).trim() === '-') cuotas = '';
+        return {
+            'Código Ce': r.ce,
+            Grupo: r.grupo,
+            Orden: r.orden,
+            'Código de concepto': r.concepto,
+            Concepto: r.descripcion,
+            Importe: imp,
+            'Número cuota': cuotas,
+            Fecha: `${d}/${m}/${y}`
+        };
+    }
+
+    function escribirLibroGrl(data, nombreArchivo) {
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'GRL');
+        XLSX.writeFile(wb, nombreArchivo);
+    }
+
+    function exportarGranville(id) {
+        const r = registros.find((reg) => reg.id === id);
+        if (!r) return;
+        escribirLibroGrl([buildFilaGranvilleExport(r)], `GRL_${r.grupo}_${r.orden}.xlsx`);
+    }
+
+    function onGrlCheckboxChange(id, checked) {
+        const nid = Number(id);
+        if (checked) grlSeleccionIds.add(nid);
+        else grlSeleccionIds.delete(nid);
+        actualizarPanelGrlMasivo();
+    }
+
+    function limpiarGrlSeleccionObsoleta() {
+        for (const id of grlSeleccionIds) {
+            const r = registros.find((reg) => reg.id === id);
+            if (!r || !esGrlSeleccionable(r)) grlSeleccionIds.delete(id);
+        }
+    }
+
+    function actualizarPanelGrlMasivo() {
+        const bar = document.getElementById('grl-masivo-bar');
+        const countEl = document.getElementById('grl-masivo-count');
+        if (!bar || !countEl) return;
+        const hayElegibles = registros.some((r) => esGrlSeleccionable(r));
+        bar.hidden = !hayElegibles;
+        const n = grlSeleccionIds.size;
+        countEl.textContent = n === 1 ? '1 seleccionado' : n + ' seleccionados';
+    }
+
+    function seleccionarTodosGrlFinanzasVisibles() {
+        registros.filter((r) => esGrlSeleccionable(r)).forEach((r) => grlSeleccionIds.add(r.id));
+        actualizarPanelGrlMasivo();
+        pintarTablaFinanzas(listaFinanzasVisible());
+    }
+
+    function deseleccionarTodosGrl() {
+        grlSeleccionIds.clear();
+        actualizarPanelGrlMasivo();
+        pintarTablaFinanzas(listaFinanzasVisible());
+    }
+
+    function exportarGranvilleMasivo() {
+        if (grlSeleccionIds.size === 0) {
+            alert('Seleccioná al menos un pago Granville (casilla en GRL Export).');
+            return;
+        }
+        const rows = [];
+        grlSeleccionIds.forEach((id) => {
+            const r = registros.find((reg) => reg.id === id);
+            if (r && esGrlSeleccionable(r)) rows.push(r);
+        });
+        if (rows.length === 0) {
+            alert('Ningún registro seleccionado sigue siendo válido (Granville, aut. PDA y finanzas, sin abonar).');
+            return;
+        }
+        const porCe = {};
+        rows.forEach((r) => {
+            const ce = String(r.ce || '').trim();
+            if (!porCe[ce]) porCe[ce] = [];
+            porCe[ce].push(r);
+        });
+        const ces = Object.keys(porCe);
+        ces.forEach((ce, i) => {
+            const data = porCe[ce].map(buildFilaGranvilleExport);
+            setTimeout(() => {
+                escribirLibroGrl(data, `GRL_CE_${ce}_lote.xlsx`);
+            }, i * 350);
+        });
+        if (ces.length > 1) {
+            alert('Se descargarán ' + ces.length + ' archivos (uno por CE): ' + ces.join(', '));
+        }
+    }
+
+    async function exportarPago() {
+        const filtrados = registros.filter(
+            (r) =>
+                r.aut_pda === 'Autorizado' &&
+                r.aut_finanzas === 'Autorizado' &&
+                r.comp_saldo === 'Autorizado' &&
+                !String(r.ref_asiento || '').trim()
+        );
+        const filasCuponVacio = [];
+        let cuponesRecuperados = 0;
+        for (const r of filtrados) {
+            if (!requiereCuponEmpresa(r.empresa)) continue;
+            let cupon = String(r.cupon ?? '').trim();
+            let avisoCupon = '';
+            if (
+                !cupon &&
+                r.adjuntoUrl &&
+                r.adjuntoNombre &&
+                String(r.adjuntoNombre).toLowerCase().endsWith('.pdf')
+            ) {
+                const det = await extraerCuponDesdeAdjuntoPdfDetalle(
+                    r.empresa,
+                    r.adjuntoUrl,
+                    r.adjuntoNombre,
+                    r.grupo,
+                    r.orden,
+                    r.monto
+                );
+                if (det.cupon) {
+                    r.cupon = det.cupon;
+                    cupon = det.cupon;
+                    cuponesRecuperados++;
+                    await syncRowSilent(r);
+                } else if (det.motivo) {
+                    avisoCupon = mensajeExtraccionCuponFallida(r.empresa, det);
+                } else {
+                    avisoCupon = 'No se pudo extraer el cupón del PDF.';
+                }
+            }
+            if (!cupon) {
+                if (!avisoCupon) {
+                    if (!r.adjuntoUrl || !r.adjuntoNombre || r.adjuntoNombre === '-') {
+                        avisoCupon = 'sin adjunto PDF.';
+                    } else if (!String(r.adjuntoNombre).toLowerCase().endsWith('.pdf')) {
+                        avisoCupon = 'el adjunto no es PDF.';
+                    } else {
+                        avisoCupon = 'cupón vacío en la exportación.';
+                    }
+                }
+                filasCuponVacio.push(
+                    'Gr ' +
+                        r.grupo +
+                        ' Ord ' +
+                        r.orden +
+                        ' (' +
+                        r.empresa +
+                        '): ' +
+                        avisoCupon
+                );
+            }
+        }
+        if (cuponesRecuperados > 0) renderizar();
+        if (filasCuponVacio.length) {
+            alert(
+                'Atención: estas filas exportarán con cupón de pago vacío:\n\n' +
+                    filasCuponVacio.join('\n')
+            );
+        }
+        const data = filtrados.map(r => {
+            const cupon = requiereCuponEmpresa(r.empresa)
+                ? String(r.cupon ?? '').trim()
+                : '';
+            return {
+                "fecha/hora carga": mostrarFechaHoraCarga(r.fechaHora) || "",
+                "solicitante": r.solicitante || "",
+                "empresa": r.empresa || "",
+                "ce": r.ce || "",
+                "grupo": r.grupo || "",
+                "orden": r.orden || "",
+                "previsión": r.prevision || "",
+                "monto integración": r.monto || "",
+                "ref/cta": r.cta_personal || "",
+                "titular": r.titular || "",
+                "concepto": r.concepto || "",
+                "desc.": r.descripcion || "",
+                "cuotas": r.cuotas || "",
+                "llave contra llave/doc": r.respaldo || "",
+                "saldo": r.saldo || "",
+                "cta mayor": r.cuenta_mayor || "",
+                "obs solicitante": r.obsSolicitante || "",
+                "vencimiento": r.vencimiento || "",
+                "cupón de pago": cupon
+            };
+        });
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Pagos");
+        XLSX.writeFile(wb, "Planilla_Para_Pago.xlsx");
+    }
+
+    function formatVencimientoHistorico(v) {
+        const parts = String(v || '').split('-');
+        const y = parts[0], m = parts[1], d = parts[2];
+        return (d && m && y) ? `${d}/${m}/${y}` : (v || '');
+    }
+
+    function previsionTextoHistorico(r) {
+        if (r.prevision === 'SI' && r.montoPrev != null && String(r.montoPrev).trim() !== '' && r.montoPrev !== '-') {
+            return `${r.prevision} (${r.montoPrev})`;
+        }
+        return r.prevision || '-';
+    }
+
+    function montoIntegracionHistorico(r) {
+        let s = String(r.monto ?? '').trim();
+        if (r.fechaEdicionMonto && r.fechaEdicionMonto !== '-') {
+            s = (s ? s + ' ' : '') + '(Mod: ' + r.fechaEdicionMonto + ')';
+        }
+        return s.trim() || '-';
+    }
+
+    function adjuntoTextoHistorico(r) {
+        let a = (r.adjuntoNombre && r.adjuntoNombre !== '-') ? String(r.adjuntoNombre) : '-';
+        if (r.fechaEdicionAdjunto && r.fechaEdicionAdjunto !== '-') {
+            a = a !== '-' ? a + ' (Mod: ' + r.fechaEdicionAdjunto + ')' : '(Mod: ' + r.fechaEdicionAdjunto + ')';
+        }
+        return a;
+    }
+
+    function vencimientoHistorico(r) {
+        let t = formatVencimientoHistorico(r.vencimiento);
+        if (r.cumple72hs === false) {
+            t = (t ? t + ' ' : '') + '(Fuera plazo 72h háb.)';
+        }
+        return t.trim() || '-';
+    }
+
+    /** Columnas alineadas a la planilla unificada: desde Fecha/Hora Carga hasta OBS. FINANZAS (sin Acción, GRL ni Comprobante). */
+    function exportarHistorico() {
+        const data = registros.map((r) => ({
+            'Fecha/Hora Carga': mostrarFechaHoraCarga(r.fechaHora) || '',
+            'Solicitante': r.solicitante || '',
+            'Empresa': r.empresa || '',
+            'CE': r.ce || '',
+            'Grupo': r.grupo || '',
+            'Orden': r.orden || '',
+            'Previsión': previsionTextoHistorico(r),
+            'Monto Integración': montoIntegracionHistorico(r),
+            'Ref/Cta': r.cta_personal || '',
+            'Titular': r.titular || '',
+            'Concepto': r.concepto || '',
+            'Desc.': r.descripcion || '',
+            'Cuotas': r.cuotas || '',
+            'Llave contra llave / doc': r.respaldo || '',
+            'Saldo': r.saldo || '',
+            'Cta Mayor': r.cuenta_mayor || '',
+            'Adjunto': adjuntoTextoHistorico(r),
+            'OBS Solicitante': r.obsSolicitante || '',
+            'Vencimiento': vencimientoHistorico(r),
+            'AUTORIZACIÓN FINANZAS': r.aut_finanzas || '',
+            'COMPROBACIÓN SALDO': r.comp_saldo || '',
+            'FECHA SOLIC. FINANZAS': r.fecha_solic || '',
+            'CONFIRMACIÓN PAGO': r.conf_pago || '',
+            'REF. ASIENTO': r.ref_asiento || '',
+            'OBS. FINANZAS': r.obsFinanzas != null ? String(r.obsFinanzas) : ''
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Historico");
+        XLSX.writeFile(wb, "Planilla_Historica.xlsx");
+    }
+
+    /** Exporta solo filas abonadas (ref. asiento + confirmación de pago), con columna AUT. PDA. */
+    function exportarHistoricoAbonados() {
+        const list = registros.filter((r) => esAbonado(r));
+        if (list.length === 0) {
+            alert("No hay registros abonados para exportar.");
+            return;
+        }
+        const data = list.map((r) => ({
+            "Fecha/Hora Carga": mostrarFechaHoraCarga(r.fechaHora) || "",
+            Solicitante: r.solicitante || "",
+            Empresa: r.empresa || "",
+            CE: r.ce || "",
+            Grupo: r.grupo || "",
+            Orden: r.orden || "",
+            Previsión: previsionTextoHistorico(r),
+            "Monto Integración": montoIntegracionHistorico(r),
+            "Ref/Cta": r.cta_personal || "",
+            Titular: r.titular || "",
+            Concepto: r.concepto || "",
+            "Desc.": r.descripcion || "",
+            Cuotas: r.cuotas || "",
+            "Llave contra llave / doc": r.respaldo || "",
+            Saldo: r.saldo || "",
+            "Cta Mayor": r.cuenta_mayor || "",
+            Adjunto: adjuntoTextoHistorico(r),
+            "OBS Solicitante": r.obsSolicitante || "",
+            Vencimiento: vencimientoHistorico(r),
+            "AUT. PDA": r.aut_pda || "",
+            "Fecha/Hora AUT. PDA": mostrarFechaHoraAutPda(r),
+            "AUTORIZACIÓN FINANZAS": r.aut_finanzas || "",
+            "COMPROBACIÓN SALDO": r.comp_saldo || "",
+            "FECHA SOLIC. FINANZAS": r.fecha_solic || "",
+            "CONFIRMACIÓN PAGO": r.conf_pago || "",
+            "REF. ASIENTO": r.ref_asiento || "",
+            "OBS. FINANZAS": r.obsFinanzas != null ? String(r.obsFinanzas) : "",
+            "GRL Export": r.empresa === "Granville" ? "Granville" : "-",
+            Comprobante:
+                r.comprobanteNombre && r.comprobanteNombre !== "-" ? String(r.comprobanteNombre) : "-"
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Abonados");
+        XLSX.writeFile(wb, "Planilla_Abonados.xlsx");
+    }
+
+    function sesionFinanzasActiva() {
+        return Date.now() < sesionFinanzasHasta;
+    }
+
+    function sesionPdaActiva() {
+        return Date.now() < sesionPdaHasta;
+    }
+
+    function extenderSesionFinanzas() {
+        sesionFinanzasHasta = Date.now() + DURACION_SESION_MS;
+    }
+
+    function extenderSesionPda() {
+        sesionPdaHasta = Date.now() + DURACION_SESION_MS;
+    }
+
+    /** Autorizar siempre pide clave; el resto usa sesión de 3 minutos. */
+    function asegurarAccesoFinanzas(esAutorizar) {
+        if (esAutorizar) {
+            const pass = prompt('Acceso Finanzas (autorizar):');
+            if (pass !== CLAVE_FINANZAS) {
+                alert('Incorrecta.');
+                return false;
+            }
+            return true;
+        }
+        if (sesionFinanzasActiva()) return true;
+        const pass = prompt('Acceso Finanzas:');
+        if (pass !== CLAVE_FINANZAS) {
+            alert('Incorrecta.');
+            return false;
+        }
+        extenderSesionFinanzas();
+        return true;
+    }
+
+    /** Cada cambio de estado PDA pide clave; válida 3 minutos sin volver a pedirla. */
+    function asegurarAccesoPda() {
+        if (sesionPdaActiva()) return true;
+        const pass = prompt('Acceso responsable PDA:');
+        if (pass !== CLAVE_PDA) {
+            alert('Incorrecta.');
+            return false;
+        }
+        extenderSesionPda();
+        return true;
+    }
+
+    function solicitarClaveYActualizar(id, campo, valor) {
+        const r = registros.find((reg) => reg.id === id);
+        if (!r) return;
+        const esAutorizar = campo === 'aut_finanzas' && valor === 'Autorizado';
+        if (!asegurarAccesoFinanzas(esAutorizar)) {
+            renderizar();
+            return;
+        }
+        const revertir = { [campo]: r[campo] };
+        r[campo] = valor;
+        syncRow(r, revertir);
+    }
+
+    function tieneAdjuntoParaPago(r) {
+        return !!(
+            r &&
+            r.adjuntoUrl &&
+            r.adjuntoNombre &&
+            String(r.adjuntoNombre).trim() !== '' &&
+            String(r.adjuntoNombre).trim() !== '-'
+        );
+    }
+
+    function montoIntegracionPendiente(r) {
+        const m = String(r.monto ?? '')
+            .trim()
+            .replace(/\$/g, '')
+            .replace(/\s+/g, '');
+        if (!m || m === '-') return true;
+        return !validarMontoIntegracionFormato(m).ok;
+    }
+
+    function validarAntesAutorizarPda(r) {
+        const errores = [];
+        if (r.prevision === 'SI' && montoIntegracionPendiente(r)) {
+            errores.push(
+                'No se puede autorizar: con Previsión SI debe completar el Monto Integración (use el lápiz en esa columna).'
+            );
+        }
+        if ((r.empresa === 'Forte Car' || r.empresa === 'Pampawagen') && !tieneAdjuntoParaPago(r)) {
+            errores.push(
+                'No se puede autorizar: ' +
+                    r.empresa +
+                    ' requiere adjunto (cupón Plan Chevrolet o comprobante DEBIN) para poder pagar.'
+            );
+        }
+        if (errores.length) return { ok: false, msg: errores.join('\n\n') };
+        return { ok: true };
+    }
+
+    function aplicarEstadoAutPda(r, valor, mostrarAlertas72) {
+        r.aut_pda = valor;
+        if (valor === 'Autorizado' || valor === 'Rechazado') {
+            r.fechaHoraAutPda = formatoFechaHoraPlanilla(new Date());
+            if (valor === 'Autorizado') {
+                const fa = parseFechaHoraCargaPlanilla(r.fechaHoraAutPda) || new Date();
+                r.cumple72hsPda = calcularDiferenciaHabiles(
+                    fa,
+                    parseFechaVencimientoRegistro(r.vencimiento)
+                );
+                if (mostrarAlertas72) {
+                    if (!r.cumple72hsPda) alert(MSG_FUERA_PLAZO_72HS);
+                    else alert(MSG_CUMPLE_PLAZO_72HS);
+                }
+            } else {
+                r.cumple72hsPda = null;
+            }
+        } else {
+            r.fechaHoraAutPda = '-';
+            r.cumple72hsPda = null;
+        }
+    }
+
+    function solicitarClavePda(id, campo, valor) {
+        const r = registros.find((reg) => reg.id === id);
+        if (!r) return;
+
+        if (campo === 'aut_pda' && valor === 'Autorizado') {
+            const vr = validarAntesAutorizarPda(r);
+            if (!vr.ok) {
+                alert(vr.msg);
+                renderizar();
+                return;
+            }
+        }
+
+        if (!asegurarAccesoPda()) {
+            renderizar();
+            return;
+        }
+
+        if (campo === 'aut_pda') {
+            aplicarEstadoAutPda(r, valor, true);
+        } else {
+            r[campo] = valor;
+        }
+        syncRow(r);
+    }
+
+    function autFinanzasPendiente(r) {
+        return (r.aut_finanzas || '-') === '-';
+    }
+
+    function esAuthMasivoFinanzasSeleccionable(r) {
+        return (
+            (r.aut_pda || '-') === 'Autorizado' &&
+            !esAbonado(r) &&
+            autFinanzasPendiente(r)
+        );
+    }
+
+    function onAuthMasivoCheckboxChange(id, checked) {
+        const nid = Number(id);
+        if (checked) authMasivoIds.add(nid);
+        else authMasivoIds.delete(nid);
+        actualizarBarraAuthMasivo();
+    }
+
+    function limpiarAuthMasivoObsoleto() {
+        for (const id of authMasivoIds) {
+            const r = registros.find((reg) => reg.id === id);
+            if (!r || !esAuthMasivoFinanzasSeleccionable(r)) authMasivoIds.delete(id);
+        }
+    }
+
+    function actualizarBarraAuthMasivo() {
+        const bar = document.getElementById('auth-masivo-bar');
+        const countEl = document.getElementById('auth-masivo-count');
+        const totalRow = document.getElementById('auth-masivo-total-fin');
+        const totalMontoEl = document.getElementById('auth-masivo-total-monto');
+        if (!bar || !countEl) return;
+
+        const hayPendientes = registros.some((r) => esAuthMasivoFinanzasSeleccionable(r));
+        bar.hidden = !hayPendientes;
+
+        const n = authMasivoIds.size;
+        countEl.textContent = n === 1 ? '1 seleccionado' : n + ' seleccionados';
+
+        const mostrarTotalFin = hayPendientes && authMasivoIds.size > 0;
+        if (totalRow) totalRow.hidden = !mostrarTotalFin;
+        if (totalMontoEl && mostrarTotalFin) {
+            totalMontoEl.textContent = formatoMontoIntegracionTotal(
+                sumarMontosIntegracionSeleccionadosFinanzas()
+            );
+        }
+    }
+
+    function seleccionarTodosAuthMasivoPendientes() {
+        registros.filter((r) => esAuthMasivoFinanzasSeleccionable(r)).forEach((r) => authMasivoIds.add(r.id));
+        renderizar();
+    }
+
+    function deseleccionarTodosAuthMasivo() {
+        authMasivoIds.clear();
+        renderizar();
+    }
+
+    async function aplicarAuthMasivo(valor) {
+        if (authMasivoIds.size === 0) {
+            alert('Seleccioná al menos un registro pendiente («-»).');
+            return;
+        }
+
+        const esAutorizar = valor === 'Autorizado';
+        const ids = [...authMasivoIds];
+
+        if (!asegurarAccesoFinanzas(esAutorizar)) {
+            renderizar();
+            return;
+        }
+
+        let n = 0;
+        for (const id of ids) {
+            const r = registros.find((reg) => reg.id === id);
+            if (!r || !esAuthMasivoFinanzasSeleccionable(r)) continue;
+            r.aut_finanzas = valor;
+            await syncRowSilent(r);
+            n++;
+        }
+        authMasivoIds.clear();
+        renderizar();
+        if (n === 0) alert('Ningún registro seleccionado sigue pendiente en finanzas.');
+    }
+
+    function setPestana(id) {
+        pestanaActiva = id;
+        if (id !== 'finanzas') authMasivoIds.clear();
+        [
+            ["carga", "tab-btn-carga", "panel-carga"],
+            ["finanzas", "tab-btn-finanzas", "panel-finanzas"],
+            ["historico", "tab-btn-historico", "panel-historico"],
+            ["eliminados", "tab-btn-eliminados", "panel-eliminados"]
+        ].forEach(([key, bid, pid]) => {
+            const on = key === id;
+            const btn = document.getElementById(bid);
+            const panel = document.getElementById(pid);
+            if (btn) {
+                btn.classList.toggle("is-active", on);
+                btn.setAttribute("aria-selected", on ? "true" : "false");
+            }
+            if (panel) panel.classList.toggle("is-active", on);
+        });
+        actualizarBarraAuthMasivo();
+        requestAnimationFrame(() => requestAnimationFrame(() => refreshPlanillaScrollGhosts()));
+    }
+
+    function listaFinanzasVisible() {
+        return ordenarParaLista(
+            registros.filter((r) => (r.aut_pda || '-') === 'Autorizado' && !esAbonado(r))
+        );
+    }
+
+    function ordenarParaLista(arr) {
+        return [...arr].sort((a, b) => {
+            const da = parseFechaHoraCargaPlanilla(a.fechaHora);
+            const db = parseFechaHoraCargaPlanilla(b.fechaHora);
+            const ta = da ? da.getTime() : 0;
+            const tb = db ? db.getTime() : 0;
+            if (tb !== ta) return tb - ta;
+            return (Number(b.id) || 0) - (Number(a.id) || 0);
+        });
+    }
+
+    function ordenarEliminados(arr) {
+        return [...arr].sort((a, b) => {
+            const da = parseFechaHoraCargaPlanilla(a.fechaHoraEliminacion);
+            const db = parseFechaHoraCargaPlanilla(b.fechaHoraEliminacion);
+            const ta = da ? da.getTime() : 0;
+            const tb = db ? db.getTime() : 0;
+            return tb - ta;
+        });
+    }
+
+    const COLSPAN_TABLA_ELIMINADOS = 29;
+
+    function vencimientoFmtCelda(r) {
+        const parts = String(r.vencimiento || "").split("-");
+        const y = parts[0], m = parts[1], d = parts[2];
+        return d && m && y ? `${d}/${m}/${y}` : (r.vencimiento || "");
+    }
+
+    function txt(v) {
+        if (v == null || v === '') return '-';
+        return escHtml(v);
+    }
+
+    function modTs(v) {
+        return v && v !== '-' ? escHtml('Mod: ' + v) : '';
+    }
+
+    function filaVaciaMensaje(tbodyId, colspan, mensaje) {
+        const tbody = document.getElementById(tbodyId);
+        if (tbody) tbody.innerHTML = '<tr><td colspan="' + colspan + '" class="empty-state">' + escHtml(mensaje) + "</td></tr>";
+    }
+
+    function pintarTablaCarga(lista) {
+        const tbody = document.getElementById("cuerpoTablaCarga");
+        if (!tbody) return;
+        if (lista.length === 0) {
+            filaVaciaMensaje("cuerpoTablaCarga", 21, "No hay solicitudes pendientes de autorización PDA.");
+            return;
+        }
+        tbody.innerHTML = "";
+        lista.forEach((r) => {
+            const tieneAsiento = String(r.ref_asiento).trim() !== "";
+            const tieneConfirmacionPago = String(r.conf_pago).trim() !== "";
+            let claseFila = "";
+            if (tieneAsiento && !tieneConfirmacionPago) claseFila = "fila-asiento-sin-confirmacion";
+            else if (tieneAsiento && tieneConfirmacionPago) claseFila = "fila-asiento";
+            else if (r.comp_saldo === "Autorizado") claseFila = "fila-autorizada";
+
+            const vencFmt = vencimientoFmtCelda(r);
+            const ap = r.aut_pda || "-";
+            const fila = tbody.insertRow();
+            fila.className = claseFila;
+
+            fila.innerHTML = `
+                <td><button class="btn-del" onclick="eliminarRegistro(${r.id})">X</button></td>
+                <td>${escHtml(mostrarFechaHoraCarga(r.fechaHora))}</td>
+                <td>${r.solicitante != null && r.solicitante !== '-' ? txt(r.solicitante) : '-'}</td>
+                <td>${txt(r.empresa)}</td>
+                <td>${txt(r.ce)}</td>
+                <td>${txt(r.grupo)}</td>
+                <td>${txt(r.orden)}</td>
+                <td>${txt(r.prevision)} ${r.prevision === "SI" ? `(${txt(r.montoPrev)})` : ""}</td>
+                <td>
+                    ${txt(r.monto)}
+                    ${r.prevision === "SI" ? `<button class="btn-edit-inline" onclick="iniciarEdicionMonto(${r.id})">✎</button>` : ""}
+                    <span class="edit-timestamp">${modTs(r.fechaEdicionMonto)}</span>
+                </td>
+                <td>
+                    ${txt(r.cta_personal)}
+                    <button class="btn-edit-inline" onclick="iniciarEdicionCtaPersonal(${r.id})" title="Editar Ref/Cta Pers.">✎</button>
+                    <span class="edit-timestamp">${modTs(r.fechaEdicionCtaPersonal)}</span>
+                </td>
+                <td>${txt(r.titular)}</td>
+                <td>${txt(r.concepto)}</td>
+                <td>${txt(r.descripcion)}</td>
+                <td>${txt(r.cuotas)}</td>
+                <td>${txt(r.respaldo)}</td>
+                <td>${txt(r.saldo)}</td>
+                <td>
+                    ${txt(r.cuenta_mayor)}
+                    <button class="btn-edit-inline" onclick="iniciarEdicionCuentaMayor(${r.id})" title="Editar Cuenta Mayor">✎</button>
+                    <span class="edit-timestamp">${modTs(r.fechaEdicionCuentaMayor)}</span>
+                </td>
+                <td>
+                    ${htmlAdjuntoView(r)}
+                    <button class="btn-edit-inline" onclick="iniciarEdicionAdjunto(${r.id})">✎</button>
+                    <span class="edit-timestamp">${modTs(r.fechaEdicionAdjunto)}</span>
+                    ${htmlIndicadorCupon(r)}
+                </td>
+                <td>${txt(r.obsSolicitante)}</td>
+                <td class="${r.cumple72hs === false ? "texto-rojo" : ""}">${escHtml(vencFmt)}</td>
+                <td>
+                    <select class="table-input" onchange="solicitarClavePda(${r.id},'aut_pda',this.value)">
+                    <option ${ap === "-" ? "selected" : ""}>-</option>
+                    <option ${ap === "Autorizado" ? "selected" : ""}>Autorizado</option>
+                    <option ${ap === "Rechazado" ? "selected" : ""}>Rechazado</option>
+                </select>
+                    ${
+                        ap === "Autorizado" || ap === "Rechazado"
+                            ? `<span class="edit-timestamp">${escHtml(mostrarFechaHoraAutPda(r))}</span>`
+                            : ""
+                    }
+                </td>
+            `;
+        });
+    }
+
+    const COLSPAN_TABLA_FINANZAS = 29;
+
+    function pintarTablaFinanzas(lista) {
+        const tbody = document.getElementById("cuerpoTablaFinanzas");
+        if (!tbody) return;
+        if (lista.length === 0) {
+            filaVaciaMensaje(
+                "cuerpoTablaFinanzas",
+                COLSPAN_TABLA_FINANZAS,
+                "No hay registros autorizados por PDA pendientes de finanzas / pago."
+            );
+            limpiarGrlSeleccionObsoleta();
+            actualizarPanelGrlMasivo();
+            limpiarAuthMasivoObsoleto();
+            actualizarBarraAuthMasivo();
+            return;
+        }
+        tbody.innerHTML = "";
+        lista.forEach((r) => {
+            const bloq = r.aut_finanzas === "Autorizado";
+            const puedeEliminar = r.aut_finanzas !== "Autorizado";
+            const tieneAsiento = String(r.ref_asiento).trim() !== "";
+            const tieneConfirmacionPago = String(r.conf_pago).trim() !== "";
+            const rechazadoFinanzas =
+                r.aut_finanzas === "Rechazado" || r.comp_saldo === "Rechazado";
+            let claseFila = "";
+            if (rechazadoFinanzas) claseFila = "fila-rechazada-finanzas";
+            else if (tieneAsiento && !tieneConfirmacionPago) claseFila = "fila-asiento-sin-confirmacion";
+            else if (tieneAsiento && tieneConfirmacionPago) claseFila = "fila-asiento";
+            else if (r.comp_saldo === "Autorizado") claseFila = "fila-autorizada";
+
+            const vencFmt = vencimientoFmtCelda(r);
+            const fila = tbody.insertRow();
+            fila.className = claseFila;
+
+            fila.innerHTML = `
+                <td>${puedeEliminar ? `<button class="btn-del" onclick="eliminarRegistro(${r.id})">X</button>` : "-"}</td>
+                <td>${escHtml(mostrarFechaHoraCarga(r.fechaHora))}</td>
+                <td>${r.solicitante != null && r.solicitante !== '-' ? txt(r.solicitante) : '-'}</td>
+                <td>${txt(r.empresa)}</td>
+                <td>${txt(r.ce)}</td>
+                <td>${txt(r.grupo)}</td>
+                <td>${txt(r.orden)}</td>
+                <td>${txt(r.prevision)} ${r.prevision === "SI" ? `(${txt(r.montoPrev)})` : ""}</td>
+                <td>
+                    ${txt(r.monto)}
+                    <span class="edit-timestamp">${modTs(r.fechaEdicionMonto)}</span>
+                </td>
+                <td>${txt(r.cta_personal)}</td>
+                <td>${txt(r.titular)}</td>
+                <td>${txt(r.concepto)}</td>
+                <td>${txt(r.descripcion)}</td>
+                <td>${txt(r.cuotas)}</td>
+                <td>${txt(r.respaldo)}</td>
+                <td>${txt(r.saldo)}</td>
+                <td>${txt(r.cuenta_mayor)}</td>
+                <td>
+                    ${htmlAdjuntoView(r)}
+                    <span class="edit-timestamp">${modTs(r.fechaEdicionAdjunto)}</span>
+                    ${htmlIndicadorCupon(r)}
+                </td>
+                <td>${txt(r.obsSolicitante)}</td>
+                <td class="${!rechazadoFinanzas && r.cumple72hsPda === false ? "texto-rojo" : ""}">${escHtml(vencFmt)}</td>
+                <td>${htmlCeldaAutPdaLectura(r)}</td>
+                <td>
+                    <div class="auth-masivo-cell">
+                    ${
+                        esAuthMasivoFinanzasSeleccionable(r)
+                            ? `<input type="checkbox" class="auth-masivo-cb" title="Incluir en autorización masiva Finanzas" ${authMasivoIds.has(r.id) ? 'checked' : ''} onchange="onAuthMasivoCheckboxChange(${r.id}, this.checked)">`
+                            : ''
+                    }
+                    <select class="table-input" onchange="solicitarClaveYActualizar(${r.id}, 'aut_finanzas', this.value)"><option ${r.aut_finanzas == "-" ? "selected" : ""}>-</option><option ${r.aut_finanzas == "Autorizado" ? "selected" : ""}>Autorizado</option><option ${r.aut_finanzas == "Rechazado" ? "selected" : ""}>Rechazado</option></select>
+                    </div>
+                </td>
+                <td><select class="table-input" onchange="solicitarClaveYActualizar(${r.id}, 'comp_saldo', this.value)"><option>-</option><option ${r.comp_saldo == "Autorizado" ? "selected" : ""}>Autorizado</option><option ${r.comp_saldo == "Rechazado" ? "selected" : ""}>Rechazado</option></select></td>
+                <td><input type="date" class="table-input" value="${escAttr(r.fecha_solic)}" onchange="solicitarClaveYActualizar(${r.id}, 'fecha_solic', this.value)"></td>
+                <td><input type="date" class="table-input" value="${escAttr(r.conf_pago)}" onchange="solicitarClaveYActualizar(${r.id}, 'conf_pago', this.value)"></td>
+                <td><input type="text" class="table-input" value="${escAttr(r.ref_asiento)}" onchange="solicitarClaveYActualizar(${r.id}, 'ref_asiento', this.value)"></td>
+                <td><input type="text" class="table-input" value="${escAttr(r.obsFinanzas)}" onchange="solicitarClaveYActualizar(${r.id}, 'obsFinanzas', this.value)"></td>
+                <td>
+                    <div class="grl-export-cell">
+                    ${esGrlSeleccionable(r) ? `<input type="checkbox" class="grl-cb-lote" title="Incluir en GRL combinado" ${grlSeleccionIds.has(r.id) ? 'checked' : ''} onchange="onGrlCheckboxChange(${r.id}, this.checked)">` : ''}
+                    ${r.empresa === "Granville" ? `<button class="btn-granville" onclick="exportarGranville(${r.id})">📥 GRL</button>` : "-"}
+                    </div>
+                </td>
+                <td>
+                    <div class="comprobante-stack">
+                        ${htmlComprobanteView(r)}
+                        <button type="button" class="btn-comp" onclick="iniciarEdicionComprobante(${r.id})" title="${r.comprobanteUrl ? 'Reemplazar comprobante de pago' : 'Subir comprobante de pago'}"><i class="fa-solid fa-file-arrow-up"></i> ${r.comprobanteUrl ? 'Reemplazar' : 'Subir'}</button>
+                        <span class="edit-timestamp">${modTs(r.fechaEdicionComprobante)}</span>
+                    </div>
+                </td>
+            `;
+        });
+        limpiarGrlSeleccionObsoleta();
+        actualizarPanelGrlMasivo();
+        limpiarAuthMasivoObsoleto();
+        actualizarBarraAuthMasivo();
+    }
+
+    function pintarTablaHistorico(lista) {
+        const tbody = document.getElementById("cuerpoTablaHistorico");
+        if (!tbody) return;
+        if (lista.length === 0) {
+            filaVaciaMensaje("cuerpoTablaHistorico", 28, "No hay registros abonados (confirmación de pago y ref. asiento completos).");
+            return;
+        }
+        tbody.innerHTML = "";
+        lista.forEach((r) => {
+            const vencFmt = vencimientoFmtCelda(r);
+            const fila = tbody.insertRow();
+            fila.className = "fila-asiento";
+
+            fila.innerHTML = `
+                <td class="cell-ro">${escHtml(mostrarFechaHoraCarga(r.fechaHora))}</td>
+                <td class="cell-ro">${r.solicitante != null && r.solicitante !== '-' ? txt(r.solicitante) : '-'}</td>
+                <td class="cell-ro">${txt(r.empresa)}</td>
+                <td class="cell-ro">${txt(r.ce)}</td>
+                <td class="cell-ro">${txt(r.grupo)}</td>
+                <td class="cell-ro">${txt(r.orden)}</td>
+                <td class="cell-ro">${txt(r.prevision)} ${r.prevision === "SI" ? `(${txt(r.montoPrev)})` : ""}</td>
+                <td class="cell-ro">${txt(r.monto)}<span class="edit-timestamp">${r.fechaEdicionMonto !== "-" ? " Mod: " + escHtml(r.fechaEdicionMonto) : ""}</span></td>
+                <td class="cell-ro">${txt(r.cta_personal)}</td>
+                <td class="cell-ro">${txt(r.titular)}</td>
+                <td class="cell-ro">${txt(r.concepto)}</td>
+                <td class="cell-ro">${txt(r.descripcion)}</td>
+                <td class="cell-ro">${txt(r.cuotas)}</td>
+                <td class="cell-ro">${txt(r.respaldo)}</td>
+                <td class="cell-ro">${txt(r.saldo)}</td>
+                <td class="cell-ro">${txt(r.cuenta_mayor)}</td>
+                <td class="cell-ro">
+                    ${htmlAdjuntoView(r)}
+                    <span class="edit-timestamp">${modTs(r.fechaEdicionAdjunto)}</span>
+                    ${htmlIndicadorCupon(r)}
+                </td>
+                <td class="cell-ro">${txt(r.obsSolicitante)}</td>
+                <td class="cell-ro">${escHtml(vencFmt)}</td>
+                <td class="cell-ro">${htmlCeldaAutPdaLectura(r)}</td>
+                <td class="cell-ro">${txt(r.aut_finanzas)}</td>
+                <td class="cell-ro">${txt(r.comp_saldo)}</td>
+                <td class="cell-ro">${txt(r.fecha_solic)}</td>
+                <td class="cell-ro">${txt(r.conf_pago)}</td>
+                <td class="cell-ro">${txt(r.ref_asiento)}</td>
+                <td class="cell-ro">${txt(r.obsFinanzas)}</td>
+                <td class="cell-ro">${r.empresa === "Granville" ? `<button class="btn-granville" onclick="exportarGranville(${r.id})">📥 GRL</button>` : "-"}</td>
+                <td class="cell-ro">
+                    <div class="comprobante-stack">
+                        ${htmlComprobanteView(r)}
+                        <span class="edit-timestamp">${modTs(r.fechaEdicionComprobante)}</span>
+                    </div>
+                </td>
+            `;
+        });
+    }
+
+    function pintarTablaEliminados(lista) {
+        const tbody = document.getElementById('cuerpoTablaEliminados');
+        if (!tbody) return;
+        if (lista.length === 0) {
+            filaVaciaMensaje(
+                'cuerpoTablaEliminados',
+                COLSPAN_TABLA_ELIMINADOS,
+                'No hay registros eliminados.'
+            );
+            return;
+        }
+        tbody.innerHTML = '';
+        lista.forEach((r) => {
+            const vencFmt = vencimientoFmtCelda(r);
+            const fila = tbody.insertRow();
+            fila.className = 'fila-rechazada-finanzas';
+
+            fila.innerHTML = `
+                <td class="cell-ro">${escHtml(mostrarFechaHoraCarga(r.fechaHoraEliminacion))}</td>
+                <td class="cell-ro">${escHtml(mostrarFechaHoraCarga(r.fechaHora))}</td>
+                <td class="cell-ro">${r.solicitante != null && r.solicitante !== '-' ? txt(r.solicitante) : '-'}</td>
+                <td class="cell-ro">${txt(r.empresa)}</td>
+                <td class="cell-ro">${txt(r.ce)}</td>
+                <td class="cell-ro">${txt(r.grupo)}</td>
+                <td class="cell-ro">${txt(r.orden)}</td>
+                <td class="cell-ro">${txt(r.prevision)} ${r.prevision === 'SI' ? `(${txt(r.montoPrev)})` : ''}</td>
+                <td class="cell-ro">${txt(r.monto)}<span class="edit-timestamp">${r.fechaEdicionMonto !== '-' ? ' Mod: ' + escHtml(r.fechaEdicionMonto) : ''}</span></td>
+                <td class="cell-ro">${txt(r.cta_personal)}</td>
+                <td class="cell-ro">${txt(r.titular)}</td>
+                <td class="cell-ro">${txt(r.concepto)}</td>
+                <td class="cell-ro">${txt(r.descripcion)}</td>
+                <td class="cell-ro">${txt(r.cuotas)}</td>
+                <td class="cell-ro">${txt(r.respaldo)}</td>
+                <td class="cell-ro">${txt(r.saldo)}</td>
+                <td class="cell-ro">${txt(r.cuenta_mayor)}</td>
+                <td class="cell-ro">
+                    ${htmlAdjuntoView(r)}
+                    <span class="edit-timestamp">${modTs(r.fechaEdicionAdjunto)}</span>
+                    ${htmlIndicadorCupon(r)}
+                </td>
+                <td class="cell-ro">${txt(r.obsSolicitante)}</td>
+                <td class="cell-ro">${escHtml(vencFmt)}</td>
+                <td class="cell-ro">${htmlCeldaAutPdaLectura(r)}</td>
+                <td class="cell-ro">${txt(r.aut_finanzas)}</td>
+                <td class="cell-ro">${txt(r.comp_saldo)}</td>
+                <td class="cell-ro">${txt(r.fecha_solic)}</td>
+                <td class="cell-ro">${txt(r.conf_pago)}</td>
+                <td class="cell-ro">${txt(r.ref_asiento)}</td>
+                <td class="cell-ro">${txt(r.obsFinanzas)}</td>
+                <td class="cell-ro">${r.empresa === 'Granville' ? `<button class="btn-granville" onclick="exportarGranville(${r.id})">📥 GRL</button>` : '-'}</td>
+                <td class="cell-ro">
+                    <div class="comprobante-stack">
+                        ${htmlComprobanteView(r)}
+                        <span class="edit-timestamp">${modTs(r.fechaEdicionComprobante)}</span>
+                    </div>
+                </td>
+            `;
+        });
+    }
+
+    function bindPlanillaScaffoldScroll(scaffold) {
+        if (scaffold.dataset.scrollBound === "1") return;
+        const main = scaffold.querySelector(".planilla-scroll-x-main");
+        const top = scaffold.querySelector(".planilla-scroll-x-top");
+        const bottom = scaffold.querySelector(".planilla-scroll-x-bottom");
+        const rail = scaffold.querySelector(".planilla-scroll-y-right");
+        if (!main || !top || !bottom) return;
+        scaffold.dataset.scrollBound = "1";
+        let lockX = false;
+        let lockY = false;
+        function onScrollX(src) {
+            if (lockX) return;
+            lockX = true;
+            const left = src.scrollLeft;
+            [main, top, bottom].forEach((el) => {
+                if (el !== src) el.scrollLeft = left;
+            });
+            lockX = false;
+        }
+        function onScrollY(src) {
+            if (lockY) return;
+            lockY = true;
+            const topPx = src.scrollTop;
+            if (main !== src) main.scrollTop = topPx;
+            if (rail && rail !== src) rail.scrollTop = topPx;
+            lockY = false;
+        }
+        main.addEventListener(
+            "scroll",
+            () => {
+                onScrollX(main);
+                onScrollY(main);
+            },
+            { passive: true }
+        );
+        top.addEventListener("scroll", () => onScrollX(top), { passive: true });
+        bottom.addEventListener("scroll", () => onScrollX(bottom), { passive: true });
+        if (rail) {
+            rail.addEventListener("scroll", () => onScrollY(rail), { passive: true });
+        }
+    }
+
+    function refreshPlanillaScrollGhosts(scaffold) {
+        const targets = scaffold
+            ? [scaffold]
+            : Array.from(document.querySelectorAll('.tab-panel.is-active .planilla-scaffold'));
+        targets.forEach((sc) => {
+            const table = sc.querySelector('.planilla-scroll-x-main table');
+            if (!table) return;
+            const w = table.scrollWidth + 'px';
+            const h = table.scrollHeight + 'px';
+            sc.querySelectorAll('.planilla-scroll-x-ghost').forEach((g) => {
+                g.style.width = w;
+            });
+            const yGhost = sc.querySelector('.planilla-scroll-y-ghost');
+            if (yGhost) yGhost.style.height = h;
+        });
+    }
+
+    function renderizar() {
+        const vacioMsg =
+            "No hay registros. Completá el formulario de arriba y pulsá «Cargar necesidad de pago».";
+        if (registros.length === 0) {
+            filaVaciaMensaje("cuerpoTablaCarga", 21, vacioMsg);
+            filaVaciaMensaje("cuerpoTablaFinanzas", COLSPAN_TABLA_FINANZAS, vacioMsg);
+            filaVaciaMensaje("cuerpoTablaHistorico", 28, vacioMsg);
+        } else {
+            const listaCarga = ordenarParaLista(registros.filter((r) => (r.aut_pda || "-") !== "Autorizado"));
+            const listaFin = listaFinanzasVisible();
+            const listaHist = ordenarParaLista(registros.filter((r) => esAbonado(r)));
+
+            pintarTablaCarga(listaCarga);
+            pintarTablaFinanzas(listaFin);
+            pintarTablaHistorico(listaHist);
+        }
+
+        pintarTablaEliminados(ordenarEliminados(registrosEliminados));
+        actualizarBarraAuthMasivo();
+        requestAnimationFrame(() => requestAnimationFrame(() => refreshPlanillaScrollGhosts()));
+    }
+
+    window.addEventListener("resize", () => refreshPlanillaScrollGhosts());
+
+    loadEliminados();
+    loadData();
+    toggleCE();
+    togglePrevision();
+    document.querySelectorAll(".planilla-scaffold").forEach(bindPlanillaScaffoldScroll);
+</script>
+</body>
+</html>
