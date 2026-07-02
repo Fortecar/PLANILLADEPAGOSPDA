@@ -744,6 +744,7 @@
                     <option value="Avelina Tubio">Avelina Tubio</option>
                     <option value="Silvina Granero">Silvina Granero</option>
                     <option value="Hector Montserrat">Hector Montserrat</option>
+                    <option value="Bruno Gonzalez">Bruno Gonzalez</option>
                 </select>
             </div>
             <div class="form-group"><label>Grupo</label><input type="text" id="grupo" required></div>
@@ -846,6 +847,19 @@
           </button>
           <button type="button" class="tab-btn" role="tab" aria-selected="false" id="tab-btn-eliminados" onclick="setPestana('eliminados')">
             <i class="fa-solid fa-trash-can mr-1"></i> 4. Eliminados (histórico)
+          </button>
+        </div>
+
+        <div class="flex items-center gap-3 mt-3 mb-1 px-1">
+          <span class="text-xs font-semibold text-slate-700 flex items-center gap-1">
+            <i class="fa-solid fa-calendar"></i> Filtrar vencimiento:
+          </span>
+          <label for="filtroDesde" class="text-xs text-slate-500">Desde</label>
+          <input type="date" id="filtroDesde" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white shadow-sm focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none" onchange="renderizar()">
+          <label for="filtroHasta" class="text-xs text-slate-500">Hasta</label>
+          <input type="date" id="filtroHasta" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white shadow-sm focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none" onchange="renderizar()">
+          <button type="button" class="text-xs text-slate-400 hover:text-red-600 transition" onclick="limpiarFiltroFecha()" title="Quitar filtro">
+            <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
 
@@ -3764,6 +3778,40 @@
         });
     }
 
+    function restarNDiasHabiles(fecha, n) {
+        const temp = new Date(fecha);
+        temp.setHours(0, 0, 0, 0);
+        let contados = 0;
+        while (contados < n) {
+            temp.setDate(temp.getDate() - 1);
+            if (esHabil(temp)) contados++;
+        }
+        return temp;
+    }
+
+    function fmtDateInput(d) {
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function filtrarPorRango(lista) {
+        const desde = document.getElementById('filtroDesde').value;
+        const hasta = document.getElementById('filtroHasta').value;
+        if (!desde && !hasta) return lista;
+        return lista.filter(r => {
+            if (!r.vencimiento) return false;
+            const v = String(r.vencimiento);
+            if (desde && v < desde) return false;
+            if (hasta && v > hasta) return false;
+            return true;
+        });
+    }
+
+    function limpiarFiltroFecha() {
+        document.getElementById('filtroDesde').value = '';
+        document.getElementById('filtroHasta').value = '';
+        renderizar();
+    }
+
     function renderizar() {
         const vacioMsg =
             "No hay registros. Completá el formulario de arriba y pulsá «Cargar necesidad de pago».";
@@ -3772,9 +3820,13 @@
             filaVaciaMensaje("cuerpoTablaFinanzas", COLSPAN_TABLA_FINANZAS, vacioMsg);
             filaVaciaMensaje("cuerpoTablaHistorico", 28, vacioMsg);
         } else {
-            const listaCarga = ordenarParaLista(registros.filter((r) => (r.aut_pda || "-") !== "Autorizado"));
-            const listaFin = listaFinanzasVisible();
-            const listaHist = ordenarParaLista(registros.filter((r) => esAbonado(r)));
+            let listaCarga = ordenarParaLista(registros.filter((r) => (r.aut_pda || "-") !== "Autorizado"));
+            let listaFin = listaFinanzasVisible();
+            let listaHist = ordenarParaLista(registros.filter((r) => esAbonado(r)));
+
+            listaCarga = filtrarPorRango(listaCarga);
+            listaFin = filtrarPorRango(listaFin);
+            listaHist = filtrarPorRango(listaHist);
 
             pintarTablaCarga(listaCarga);
             pintarTablaFinanzas(listaFin);
@@ -3790,6 +3842,9 @@
 
     loadEliminados();
     loadData();
+    const hoy = new Date();
+    document.getElementById('filtroDesde').value = fmtDateInput(restarNDiasHabiles(hoy, 7));
+    document.getElementById('filtroHasta').value = fmtDateInput(enesimoDiaHabilDesde(hoy, 7));
     toggleCE();
     togglePrevision();
     document.querySelectorAll(".planilla-scaffold").forEach(bindPlanillaScaffoldScroll);
