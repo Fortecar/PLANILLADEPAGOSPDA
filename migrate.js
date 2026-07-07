@@ -33,11 +33,11 @@ async function migrate() {
 
   await mdb.collection('counters').updateOne(
     { _id: 'rowId' },
-    { $set: { seq: Math.max(maxId + 1, Number(data.nextId) || 1) } }
+    { $set: { seq: Math.max(maxId, (Number(data.nextId) || 1) - 1) } }
   );
   await mdb.collection('counters').updateOne(
     { _id: 'opNum' },
-    { $set: { seq: Math.max(maxOp + 1, Number(data.nextOp) || 1) } }
+    { $set: { seq: Math.max(maxOp, (Number(data.nextOp) || 1) - 1) } }
   );
 
   console.log('Contadores sincronizados');

@@ -37,16 +37,16 @@ async function connect() {
 
     // Inicializar contadores si no existen
     const counters = newDb.collection('counters');
-    await counters.updateOne(
-      { _id: 'rowId' },
-      { $setOnInsert: { seq: 1 } },
-      { upsert: true }
-    );
-    await counters.updateOne(
-      { _id: 'opNum' },
-      { $setOnInsert: { seq: 1 } },
-      { upsert: true }
-    );
+  await counters.updateOne(
+    { _id: 'rowId' },
+    { $setOnInsert: { seq: 0 } },
+    { upsert: true }
+  );
+  await counters.updateOne(
+    { _id: 'opNum' },
+    { $setOnInsert: { seq: 0 } },
+    { upsert: true }
+  );
 
     client = newClient;
     db = newDb;

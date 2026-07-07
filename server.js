@@ -185,7 +185,7 @@ app.post('/api/planilla/limpiar', async (req, res) => {
     const nextOp = counterOp?.seq || 1;
     await mdb.collection('rows').deleteMany({});
     await mdb.collection('cortes').deleteMany({});
-    await mdb.collection('counters').updateOne({ _id: 'rowId' }, { $set: { seq: 1 } });
+    await mdb.collection('counters').updateOne({ _id: 'rowId' }, { $set: { seq: 0 } });
     res.json({ rows: [], cortes: [], nextId: 1, nextOp });
   } catch (e) {
     res.status(500).json({ error: 'Error al limpiar' });
