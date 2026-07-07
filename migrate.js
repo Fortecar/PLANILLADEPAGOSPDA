@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { connect, getDb, getCounter } = require('./db');
+const { connect, getDb } = require('./db');
 
 async function migrate() {
   const filePath = path.join(__dirname, 'data', 'planilla-pda.json');
