@@ -164,7 +164,11 @@ app.post('/api/planilla/finanzas/:id', async (req, res) => {
       { $set: { finanzas: typeof finanzas === 'string' ? finanzas : '' } },
       { returnDocument: 'after' }
     );
-    res.json({ row: result || null });
+    if (!result) {
+      const rows = await mdb.collection('rows').find().toArray();
+      return res.json({ rows });
+    }
+    res.json({ row: result });
   } catch (e) {
     res.status(500).json({ error: 'Error al guardar Finanzas' });
   }
