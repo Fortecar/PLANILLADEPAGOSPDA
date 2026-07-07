@@ -8,47 +8,54 @@ let db = null;
 
 async function connect() {
   if (db) return db;
-  client = new MongoClient(MONGO_URI);
-  await client.connect();
-  db = client.db(DB_NAME);
+  const newClient = new MongoClient(MONGO_URI);
+  try {
+    await newClient.connect();
+    const newDb = newClient.db(DB_NAME);
 
-  // Crear colecciones con índices
-  const collections = await db.listCollections().toArray();
-  const colNames = collections.map(c => c.name);
+    // Crear colecciones con índices
+    const collections = await newDb.listCollections().toArray();
+    const colNames = collections.map(c => c.name);
 
-  if (!colNames.includes('rows')) {
-    await db.createCollection('rows');
+    if (!colNames.includes('rows')) {
+      await newDb.createCollection('rows');
+    }
+    if (!colNames.includes('cortes')) {
+      await newDb.createCollection('cortes');
+    }
+    if (!colNames.includes('counters')) {
+      await newDb.createCollection('counters');
+    }
+
+    // Índices
+    await newDb.collection('rows').createIndex({ id: 1 }, { unique: true });
+    await newDb.collection('rows').createIndex({ empresa: 1 });
+    await newDb.collection('rows').createIndex({ vencimiento: 1 });
+    await newDb.collection('rows').createIndex({ aut_pda: 1 });
+    await newDb.collection('rows').createIndex({ aut_finanzas: 1 });
+    await newDb.collection('cortes').createIndex({ orden: 1 }, { unique: true });
+
+    // Inicializar contadores si no existen
+    const counters = newDb.collection('counters');
+    await counters.updateOne(
+      { _id: 'rowId' },
+      { $setOnInsert: { seq: 1 } },
+      { upsert: true }
+    );
+    await counters.updateOne(
+      { _id: 'opNum' },
+      { $setOnInsert: { seq: 1 } },
+      { upsert: true }
+    );
+
+    client = newClient;
+    db = newDb;
+    console.log(`Conectado a MongoDB: ${DB_NAME}`);
+    return db;
+  } catch (err) {
+    await newClient.close();
+    throw err;
   }
-  if (!colNames.includes('cortes')) {
-    await db.createCollection('cortes');
-  }
-  if (!colNames.includes('counters')) {
-    await db.createCollection('counters');
-  }
-
-  // Índices
-  await db.collection('rows').createIndex({ id: 1 }, { unique: true });
-  await db.collection('rows').createIndex({ empresa: 1 });
-  await db.collection('rows').createIndex({ vencimiento: 1 });
-  await db.collection('rows').createIndex({ aut_pda: 1 });
-  await db.collection('rows').createIndex({ aut_finanzas: 1 });
-  await db.collection('cortes').createIndex({ orden: 1 }, { unique: true });
-
-  // Inicializar contadores si no existen
-  const counters = db.collection('counters');
-  await counters.updateOne(
-    { _id: 'rowId' },
-    { $setOnInsert: { seq: 1 } },
-    { upsert: true }
-  );
-  await counters.updateOne(
-    { _id: 'opNum' },
-    { $setOnInsert: { seq: 1 } },
-    { upsert: true }
-  );
-
-  console.log(`Conectado a MongoDB: ${DB_NAME}`);
-  return db;
 }
 
 function getDb() {
@@ -57,7 +64,8 @@ function getDb() {
 }
 
 async function incrementCounter(name) {
-  const result = await db.collection('counters').findOneAndUpdate(
+  const database = getDb();
+  const result = await database.collection('counters').findOneAndUpdate(
     { _id: name },
     { $inc: { seq: 1 } },
     { returnDocument: 'after', upsert: true }
@@ -66,12 +74,15 @@ async function incrementCounter(name) {
 }
 
 async function getCounter(name) {
-  const doc = await db.collection('counters').findOne({ _id: name });
+  const database = getDb();
+  const doc = await database.collection('counters').findOne({ _id: name });
   return doc ? doc.seq : 1;
 }
 
 async function disconnect() {
   if (client) await client.close();
+  client = null;
+  db = null;
 }
 
 module.exports = { connect, getDb, incrementCounter, getCounter, disconnect };
