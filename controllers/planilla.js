@@ -28,6 +28,16 @@ const createFila = async (req, res) => {
   if (!row || typeof row !== 'object') {
     return res.status(400).json({ error: 'Cuerpo inválido' });
   }
+  if (req.files) {
+    if (req.files['adjunto']) {
+      row.adjuntoUrl = req.files['adjunto'][0].location;
+      row.adjuntoNombre = req.files['adjunto'][0].originalname;
+    }
+    if (req.files['comprobante']) {
+      row.comprobanteUrl = req.files['comprobante'][0].location;
+      row.comprobanteNombre = req.files['comprobante'][0].originalname;
+    }
+  }
   try {
     const newId = await incrementCounter('rowId');
     const newOp = await incrementCounter('opNum');
@@ -54,6 +64,16 @@ const updateFila = async (req, res) => {
   delete updated._id;
   delete updated.id;
   delete updated.numeroOperacion;
+  if (req.files) {
+    if (req.files['adjunto']) {
+      updated.adjuntoUrl = req.files['adjunto'][0].location;
+      updated.adjuntoNombre = req.files['adjunto'][0].originalname;
+    }
+    if (req.files['comprobante']) {
+      updated.comprobanteUrl = req.files['comprobante'][0].location;
+      updated.comprobanteNombre = req.files['comprobante'][0].originalname;
+    }
+  }
   try {
     const result = await Row.findOneAndUpdate(
       { id },

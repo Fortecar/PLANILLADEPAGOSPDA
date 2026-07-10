@@ -2688,22 +2688,123 @@
         }
 
         if (fileInput.files.length > 0) {
-            const reader = new FileReader();
-            reader.onload = async function (ev) {
-                try {
-                    await enviarFila(fileInput.files[0].name, ev.target.result);
-                } catch (e) {
-                    alert('Error al procesar la carga.');
-                }
-            };
-            reader.onerror = function () {
-                cargaEnCurso = false;
-                if (btnCargar) btnCargar.disabled = false;
-                alert('Error al leer el adjunto.');
-            };
-            reader.readAsDataURL(fileInput.files[0]);
+            if (useApi) {
+                procesarCargaConAdjuntoS3(fileInput.files[0], btnCargar, venc, ahora);
+            } else {
+                const reader = new FileReader();
+                reader.onload = async function (ev) {
+                    try {
+                        await enviarFila(fileInput.files[0].name, ev.target.result);
+                    } catch (e) {
+                        alert('Error al procesar la carga.');
+                    }
+                };
+                reader.onerror = function () {
+                    cargaEnCurso = false;
+                    if (btnCargar) btnCargar.disabled = false;
+                    alert('Error al leer el adjunto.');
+                };
+                reader.readAsDataURL(fileInput.files[0]);
+            }
         } else {
             enviarFila('-', null).catch(() => alert('Error al procesar la carga.'));
+        }
+    }
+
+    async function procesarCargaConAdjuntoS3(file, btnCargar, venc, ahora) {
+        try {
+            const fields = {
+                solicitante: document.getElementById('solicitante').value,
+                empresa: document.getElementById('empresa').value,
+                ce: document.getElementById('ce').value || '-',
+                grupo: document.getElementById('grupo').value,
+                orden: document.getElementById('orden').value,
+                prevision: document.getElementById('prevision').value,
+                montoPrev: document.getElementById('monto_prev').value || '-',
+                monto: document.getElementById('monto').value || '-',
+                cta_personal: document.getElementById('cta_personal').value,
+                titular: document.getElementById('titular').value,
+                concepto: document.getElementById('concepto').value,
+                descripcion: document.getElementById('descripcion').value,
+                cuotas: document.getElementById('cuotas').value || '-',
+                respaldo: document.getElementById('respaldo').value || '-',
+                saldo: document.getElementById('saldo').value || '-',
+                cuenta_mayor: document.getElementById('cuenta_mayor').value,
+                obsSolicitante: document.getElementById('observaciones_carga').value || '-',
+                vencimiento: venc,
+                adjuntoNombre: file.name,
+                adjuntoUrl: null,
+                cupon: ''
+            };
+            const nuevo = buildNuevoRegistroPago(ahora, fields);
+            const payload = { ...nuevo };
+            delete payload.id;
+            delete payload.numeroOperacion;
+            const formData = new FormData();
+            formData.append('adjunto', file);
+            for (const [key, val] of Object.entries(payload)) {
+                formData.append(key, val == null ? '' : String(val));
+            }
+            const res = await fetch(apiUrl('/api/planilla/fila'), {
+                method: 'POST',
+                body: formData
+            });
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            if (data && data.row) {
+                const row = normalizarRegistro(data.row);
+                registros.push(row);
+                if (row.adjuntoUrl && requiereCuponEmpresa(fields.empresa)) {
+                    await aplicarExtraccionCuponRegistro(row, { avisarSiFalla: true });
+                    if (row.cupon) {
+                        await fetch(apiUrl('/api/planilla/fila/' + row.id), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ cupon: row.cupon })
+                        });
+                    }
+                }
+            }
+            renderizar();
+            document.getElementById('pagoForm').reset();
+            toggleCE();
+            togglePrevision();
+        } catch (e) {
+            alert('Error al guardar en el servidor.');
+        } finally {
+            cargaEnCurso = false;
+            if (btnCargar) btnCargar.disabled = false;
+        }
+    }
+
+    async function subirArchivoARow(r, file, fieldName, input) {
+        try {
+            const formData = new FormData();
+            formData.append(fieldName, file);
+            const res = await fetch(apiUrl('/api/planilla/fila/' + r.id), {
+                method: 'POST',
+                body: formData
+            });
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            if (data && data.row) {
+                const urlField = fieldName + 'Url';
+                const nameField = fieldName + 'Nombre';
+                const dateField = 'fechaEdicion' + (fieldName === 'adjunto' ? 'Adjunto' : 'Comprobante');
+                r[nameField] = file.name;
+                r[urlField] = data.row[urlField];
+                r[dateField] = formatoFechaHoraPlanilla(new Date());
+                if (fieldName === 'adjunto') {
+                    idEditandoAdjunto = null;
+                    await aplicarExtraccionCuponRegistro(r, { avisarSiFalla: true });
+                } else {
+                    idEditandoComprobante = null;
+                }
+                input.value = '';
+                syncRow(r);
+            }
+        } catch (e) {
+            alert('Error al subir el archivo.');
         }
     }
 
@@ -2771,17 +2872,20 @@
             const r = registros.find((reg) => reg.id === idEditandoAdjunto);
             if (!r) return;
             const file = input.files[0];
-            const reader = new FileReader();
-            reader.onload = async function (ev) {
-                r.adjuntoNombre = file.name;
-                r.adjuntoUrl = ev.target.result;
-                r.fechaEdicionAdjunto = formatoFechaHoraPlanilla(new Date());
-                await aplicarExtraccionCuponRegistro(r, { avisarSiFalla: true });
-                idEditandoAdjunto = null;
-                input.value = '';
-                syncRow(r);
-            };
-            reader.readAsDataURL(file);
+            if (useApi) {
+                subirArchivoARow(r, file, 'adjunto', input);
+            } else {
+                const reader = new FileReader();
+                reader.onload = function (ev) {
+                    r.adjuntoNombre = file.name;
+                    r.adjuntoUrl = ev.target.result;
+                    r.fechaEdicionAdjunto = formatoFechaHoraPlanilla(new Date());
+                    idEditandoAdjunto = null;
+                    input.value = '';
+                    syncRow(r);
+                };
+                reader.readAsDataURL(file);
+            }
         }
     }
 
@@ -2811,16 +2915,20 @@
                 return;
             }
             const file = input.files[0];
-            const reader = new FileReader();
-            reader.onload = function (ev) {
-                r.comprobanteNombre = file.name;
-                r.comprobanteUrl = ev.target.result;
-                r.fechaEdicionComprobante = formatoFechaHoraPlanilla(new Date());
-                idEditandoComprobante = null;
-                input.value = '';
-                syncRow(r);
-            };
-            reader.readAsDataURL(file);
+            if (useApi) {
+                subirArchivoARow(r, file, 'comprobante', input);
+            } else {
+                const reader = new FileReader();
+                reader.onload = function (ev) {
+                    r.comprobanteNombre = file.name;
+                    r.comprobanteUrl = ev.target.result;
+                    r.fechaEdicionComprobante = formatoFechaHoraPlanilla(new Date());
+                    idEditandoComprobante = null;
+                    input.value = '';
+                    syncRow(r);
+                };
+                reader.readAsDataURL(file);
+            }
         }
     }
 

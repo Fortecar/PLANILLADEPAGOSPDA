@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const mongodbConn = async () => {
   try {
     const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/planilla-pda';
-    const dbName = process.env.MONGODB_DB || 'planilla-pda';
+    const dbName = process.env['MONGODB_NAME_PLANILLA-PAGOS-PDA'] || 'planilla-pda';
 
     await mongoose.connect(uri, { dbName });
 
