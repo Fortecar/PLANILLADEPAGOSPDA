@@ -6,11 +6,11 @@ on:
 
 env:
   AWS_REGION: sa-east-1
-  ECR_REPOSITORY: planilla-pda-repository
-  ECS_SERVICE: planilla-pda-srv
-  ECS_CLUSTER: planilla-pda-cluster
+  ECR_REPOSITORY: planilla-pagos-pda-repository
+  ECS_SERVICE: planilla-pagos-pda-srv
+  ECS_CLUSTER: opencars-cluster
   ECS_TASK_DEFINITION: .aws/task-definition.json
-  CONTAINER_NAME: planilla-pda-container
+  CONTAINER_NAME: planilla-pagos-pda-container
 
 permissions:
   contents: read
