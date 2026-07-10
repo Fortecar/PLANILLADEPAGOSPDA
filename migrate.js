@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
-const { connect, getDb } = require('./db');
+const { mongodbConn } = require('./database/mongodbConn');
+const Row = require('./models/Row');
+const Corte = require('./models/Corte');
+const Counter = require('./models/Counter');
 
 async function migrate() {
   const filePath = path.join(__dirname, 'data', 'planilla-pda.json');
@@ -14,30 +17,30 @@ async function migrate() {
 
   console.log(`Archivo leído: ${data.rows.length} filas, ${data.cortes.length} cortes`);
 
-  await connect();
-  const mdb = getDb();
+  await mongodbConn();
 
   if (data.rows.length > 0) {
-    const rowsWithId = data.rows.map(r => ({ ...r }));
-    await mdb.collection('rows').insertMany(rowsWithId);
-    console.log(`Insertadas ${rowsWithId.length} filas en MongoDB`);
+    await Row.insertMany(data.rows);
+    console.log(`Insertadas ${data.rows.length} filas en MongoDB`);
   }
 
   if (data.cortes.length > 0) {
-    await mdb.collection('cortes').insertMany(data.cortes);
+    await Corte.insertMany(data.cortes);
     console.log(`Insertados ${data.cortes.length} cortes en MongoDB`);
   }
 
   const maxId = data.rows.reduce((m, r) => Math.max(m, Number(r.id) || 0), 0);
   const maxOp = data.rows.reduce((m, r) => Math.max(m, Number(r.numeroOperacion) || 0), 0);
 
-  await mdb.collection('counters').updateOne(
+  await Counter.updateOne(
     { _id: 'rowId' },
-    { $set: { seq: Math.max(maxId, (Number(data.nextId) || 1) - 1) } }
+    { $set: { seq: Math.max(maxId, (Number(data.nextId) || 1) - 1) } },
+    { upsert: true }
   );
-  await mdb.collection('counters').updateOne(
+  await Counter.updateOne(
     { _id: 'opNum' },
-    { $set: { seq: Math.max(maxOp, (Number(data.nextOp) || 1) - 1) } }
+    { $set: { seq: Math.max(maxOp, (Number(data.nextOp) || 1) - 1) } },
+    { upsert: true }
   );
 
   console.log('Contadores sincronizados');
