@@ -3,3 +3,6 @@ npm-cache/
 *.log
 .env
 REFERENCIA.md
+*.ps1
+*.txt
+*.xlsx
